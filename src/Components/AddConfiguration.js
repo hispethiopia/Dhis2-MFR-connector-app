@@ -3,6 +3,7 @@ import { DataQuery, useDataMutation, useAlert } from '@dhis2/app-runtime'
 import { Button, InputField, SingleSelectField, SingleSelectOption, Transfer } from '@dhis2/ui'
 import classes from '../App.module.css'
 import { useNavigate } from 'react-router-dom';
+import { generateId } from '../functions/helpers';
 
 const query = {
     optionSets: {
@@ -73,7 +74,7 @@ const AddConfiguration = () => {
             selectedUserRoles
         }
 
-        const Key = `Key_${Date.now()}`
+        const Key = generateId(11);
 
         try {
             await mutate({
