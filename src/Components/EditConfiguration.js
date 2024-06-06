@@ -40,6 +40,13 @@ const query = {
             paging: false
         }
     },
+    categoryOptions: {
+        resource: 'categoryOptions',
+        params: {
+            fields: 'id,displayName',
+            paging: false
+        }
+    }
 }
 
 const fetchConfigurationQuery = (Key) => ({
@@ -63,8 +70,9 @@ const EditConfiguration = () => {
     const [selectedOptionSets, setSelectedOptionSets] = useState({})
     const [selectedOUGs, setSelectedOUGs] = useState([])
     const [selectedDataSets, setSelectedDataSets] = useState([])
-    const [selectedUserGroups, setSelectedUserGroups] = useState([])
-    const [selectedUserRoles, setSelectedUserRoles] = useState([])
+    const [selectedCategoryOptions, setSelectedCategoryOptions] = useState([])
+    const [userConfigs, setUserConfigs] = useState([])
+
 
     const successAlert = useAlert('Configuration updated successfully!', { duration: 3000 })
     const errorAlert = useAlert('Failed to update configuration', { critical: true })
@@ -81,10 +89,14 @@ const EditConfiguration = () => {
             setSelectedOptionSets(config.selectedOptionSets || {})
             setSelectedOUGs(config.selectedOUGs || [])
             setSelectedDataSets(config.selectedDataSets || [])
-            setSelectedUserGroups(config.selectedUserGroups || [])
-            setSelectedUserRoles(config.selectedUserRoles || [])
+            setSelectedCategoryOptions(config.selectedCategoryOptions || [])
+            setUserConfigs(config.userConfigs || [])
         }
     }, [dataConfig])
+
+    const handleCancel = () => {
+        navigate('/')
+    }
 
     const handleSave = async () => {
         const toSave = {
@@ -92,8 +104,8 @@ const EditConfiguration = () => {
             selectedOptionSets,
             selectedOUGs,
             selectedDataSets,
-            selectedUserGroups,
-            selectedUserRoles
+            selectedCategoryOptions,
+            userConfigs
         }
 
         try {
@@ -118,6 +130,7 @@ const EditConfiguration = () => {
     const server_dataSets = dataOptions.dataSets?.dataSets?.map(item => remapToLabelAndValue(item)) || []
     const server_userRoles = dataOptions.userRoles?.userRoles?.map(item => remapToLabelAndValue(item)) || []
     const server_userGroups = dataOptions.userGroups?.userGroups?.map(item => remapToLabelAndValue(item)) || []
+    const server_categoryOptions = dataOptions.categoryOptions?.categoryOptions?.map(item => remapToLabelAndValue(item)) || []
     const server_optionSets = dataOptions.optionSets?.optionSets || []
 
     return (
@@ -182,38 +195,87 @@ const EditConfiguration = () => {
                 </>
             }
             {
-                server_userGroups.length > 0 &&
+                server_categoryOptions.length > 0 &&
                 <>
                     <br />
-                    User Groups
+                    Category options
                     <Transfer
-                        options={server_userGroups}
-                        selected={selectedUserGroups}
+                        filterable
+                        options={server_categoryOptions}
+                        selected={selectedCategoryOptions}
                         onChange={(e) => {
-                            setSelectedUserGroups(e.selected)
+                            setSelectedCategoryOptions(e.selected)
                         }}
                     />
                 </>
             }
             {
-                server_userRoles.length > 0 &&
-                <>
-                    <br />
-                    User Roles
-                    <Transfer
-                        options={server_userRoles}
-                        selected={selectedUserRoles}
-                        onChange={(e) => {
-                            setSelectedUserRoles(e.selected)
-                        }}
-                    />
-                </>
+                userConfigs.length > 0 && server_userRoles.length > 0 && server_userGroups.length > 0 &&
+                userConfigs.map(
+                    (userConfig, index) => {
+                        return (
+                            <>
+                                <InputField
+                                    label='Username suffix'
+                                    name="suffix"
+                                    value={userConfig.suffix}
+                                    onChange={
+                                        e => {
+                                            let temp = [...userConfigs]
+                                            temp[index].suffix = e.value
+                                            setUserConfigs(temp)
+                                        }
+                                    }
+                                    placeholder='Please provide a suffix for the user.'
+                                />
+                                <br />
+                                User Groups
+                                <Transfer
+                                    options={server_userGroups}
+                                    selected={userConfig.userGroups}
+                                    onChange={(e) => {
+                                        let temp = [...userConfigs]
+                                        temp[index].userGroups = e.selected
+                                        setUserConfigs(temp)
+                                    }}
+                                />
+
+                                <br />
+                                User Roles
+                                <Transfer
+                                    options={server_userRoles}
+                                    selected={userConfig.userRoles}
+                                    onChange={(e) => {
+                                        let temp = [...userConfigs]
+                                        temp[index].userRoles = e.selected
+                                        setUserConfigs(temp)
+                                    }}
+                                />
+                            </>
+                        )
+                    }
+                )
             }
+            <br />
+            <Button onClick={() => {
+                let tempUserConfigs = [...userConfigs]
+                tempUserConfigs.push({ postFix: "", userGroups: [], userRoles: [] })
+                setUserConfigs(tempUserConfigs)
+            }}>
+                Add new User
+            </Button>
+            <br />
+            <Button onClick={handleCancel} disabled={saving}>
+                {saving ? 'Saving...' : 'Cancel'}
+            </Button>
             <br />
             <Button primary onClick={handleSave} disabled={saving}>
                 {saving ? 'Saving...' : 'Save'}
             </Button>
+
+
             {saveError && <span>Error updating configuration</span>}
+
         </div>
     )
 }
