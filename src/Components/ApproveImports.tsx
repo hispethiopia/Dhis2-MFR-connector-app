@@ -1,18 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useDataMutation, useDataQuery, useAlert } from '@dhis2/app-runtime';
+import React, { useState, useContext } from 'react';
+import { useDataMutation, useAlert } from '@dhis2/app-runtime';
 import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, TableBody, TableHead } from '@dhis2/ui';
-import classes from '../App.module.css';
-import { generateId } from '../functions/helpers';
-
-const configurationsQuery = {
-    configurations: {
-        resource: 'dataStore/Dhis2-MFR',
-        params: {
-            fields: 'name,Key', 
-            paging: false,
-        },
-    },
-};
+import { mfrObjects, prepareOrganizationsObject } from '../functions/services';
+import { MFRMapped } from '../model/MFRMapped.model';
+import { MetadataContext } from '../App';
 
 const approvalStatusQuery = {
     approvalStatus: {
@@ -23,6 +14,12 @@ const approvalStatusQuery = {
         },
     },
 };
+
+const createOrganizationMutation = {
+    resource: 'organisationUnits',
+    type: 'create',
+    data: ({ data }) => data
+}
 
 const updateApprovalStatusMutation = {
     resource: 'dataStore/Dhis2-MFRApproval',
@@ -38,24 +35,23 @@ const updateApprovalStatusMutation = {
 };
 
 const ApproveImports = () => {
-    const [pendingApprovals, setPendingApprovals] = useState([]);
+    const [pendingApprovals, setPendingApprovals] = useState<MFRMapped[]>(mfrObjects);
+    const metadata = useContext(MetadataContext)
     const [showLogs, setShowLogs] = useState(false);
     const [refreshLogs, setRefreshLogs] = useState(false);
     const [filterValue, setFilterValue] = useState('');
-    const { loading: loadingConfigs, error: errorConfigs, data: dataConfigs } = useDataQuery(configurationsQuery);
-    const { loading: loadingStatus, error: errorStatus, data: dataStatus, refetch } = useDataQuery(approvalStatusQuery);
-    const [mutate] = useDataMutation(updateApprovalStatusMutation);
+    const [mutate] = useDataMutation(createOrganizationMutation);
     const successAlert = useAlert('Approval status updated successfully!', { duration: 3000 });
     const errorAlert = useAlert('Failed to update approval status', { critical: true });
 
-    useEffect(() => {
-        if (dataConfigs && dataStatus) {
-            console.log('Configurations:', dataConfigs.configurations);
-            console.log('Approval Status:', dataStatus.approvalStatus);
+    console.log("Melaeke mfr objects are ", mfrObjects, metadata)
 
-            const pending = dataConfigs.configurations.map(config => {
+    /*useEffect(() => {
+        if (metadata && dataStatus) {
+
+            const pending = metadata.configurations.map(config => {
                 const status = dataStatus.approvalStatus.find(status => status.key === config.key);
-                const key = config.key || generateId(11); 
+                const key = config.key || generateId(11);
                 return {
                     ...config,
                     key,
@@ -67,61 +63,68 @@ const ApproveImports = () => {
             });
             setPendingApprovals(pending);
         }
-    }, [dataConfigs, dataStatus]);
+    }, [metadata, dataStatus]);*/
 
-    const handleApproval = async (status, config) => {
-        console.log("Config inside handleApproval:", config);
-        const key = config.key; 
+    const handleApproval = async (mfrObject: MFRMapped) => {
+        console.log("Config inside handleApproval:", mfrObject);
+        const key = mfrObject.mfrId;
         if (!key) {
             console.error("Invalid key:", key);
             return;
         }
 
         try {
-            await mutate({
+
+            //Prepare the DHIS2 object based on configurations.
+            let organizations = prepareOrganizationsObject(
+                metadata?.configurations,
+                mfrObject,
+                "b3aCK1PTn5S"
+            )
+
+            console.log("About to mutate orgUnits to send is ", organizations)
+
+            await mutate({//Here change the key of the mutate to path.
+                //First check if the parent ID exists.
                 key,
-                approvalStatus: status,
-                name: config.name,
-                parent: config.parent,
-                change: config.change,
-                changeTo: config.changeTo
+                data: organizations
             });
             console.log('Mutation successful!');
-
-            setPendingApprovals(prev =>
-                prev.map(c => (c.key === config.key ? { ...c, approvalStatus: status } : c))
-            );
-
-            setShowLogs(true);
-            successAlert.show();
-            refetch();
-            setRefreshLogs(prev => !prev);
+            /*
+                        setPendingApprovals(prev =>
+                            prev.map(c => (c.key === config.key ? { ...c, approvalStatus: status } : c))
+                        );
+            
+                        setShowLogs(true);
+                        successAlert.show();
+                        refetch();
+                        setRefreshLogs(prev => !prev);*/
         } catch (error) {
             console.error('Error updating approval status:', error);
             errorAlert.show();
         }
     };
 
-    const filteredApprovals = pendingApprovals.filter(config =>
-        config.name.toLowerCase().includes(filterValue.toLowerCase()) ||
-        config.parent.toLowerCase().includes(filterValue.toLowerCase()) ||
+    /*const filteredApprovals = pendingApprovals.filter(config =>
+        config.name.toLowerCase().includes(filterValue.toLowerCase()) /*||
+        /*config.parent.toLowerCase().includes(filterValue.toLowerCase()) ||
         config.change.toLowerCase().includes(filterValue.toLowerCase()) ||
         config.changeTo.toLowerCase().includes(filterValue.toLowerCase()) ||
         config.approvalStatus.toLowerCase().includes(filterValue.toLowerCase())
-    );
+    );*/
 
     const handleFilterChange = event => {
         setFilterValue(event.target.value);
     };
 
-    if (loadingConfigs || loadingStatus) return <span>Loading...</span>;
-    if (errorConfigs || errorStatus) return <span>ERROR: {errorConfigs?.message || errorStatus?.message}</span>;
-    if (!dataConfigs || !dataStatus) return <span>No configurations available</span>;
-
+    /*if (loadingMetadata || loadingStatus) return <span>Loading...</span>;
+    if (errorMetadata || errorStatus) return <span>ERROR: {errorMetadata?.message || errorStatus?.message}</span>;
+    if (!metadata || !dataStatus) return <span>No configurations available</span>;
+*/
     return (
-        <div className={classes.container}>
+        <div className='container'>
             <h1>Pending Imports</h1>
-            <input className={classes.searchbar}
+            <input className='searchbar'
                 type="text"
                 placeholder="Search..."
                 value={filterValue}
@@ -150,20 +153,20 @@ const ApproveImports = () => {
                     </DataTableRow>
                 </TableHead>
                 <TableBody>
-                    {filteredApprovals.map((config, index) => (
-                        <DataTableRow key={config.key}>
-                            <DataTableCell>{config.name}</DataTableCell>
-                            <DataTableCell>{config.parent}</DataTableCell>
-                            <DataTableCell>{config.change}</DataTableCell>
-                            <DataTableCell>{config.changeTo}</DataTableCell>
-                            <DataTableCell>{config.approvalStatus}</DataTableCell>
+                    {pendingApprovals.map((pendingApproval, index) => (
+                        <DataTableRow key={pendingApproval.mfrId}>
+                            <DataTableCell>{pendingApproval.name}</DataTableCell>
+                            <DataTableCell>{pendingApproval.lastUdated}</DataTableCell>
+                            <DataTableCell>{pendingApproval.FT}</DataTableCell>
+                            <DataTableCell>{"Create"}</DataTableCell>
+                            <DataTableCell>{"Not Approved"}</DataTableCell>
                             <DataTableCell>
-                                <Button secondary onClick={() => handleApproval('rejected', config)}>
+                                <Button secondary onClick={() => handleApproval(pendingApproval)}>
                                     Reject
                                 </Button>
                             </DataTableCell>
                             <DataTableCell>
-                                <Button primary onClick={() => handleApproval('approved', config)}>
+                                <Button primary onClick={() => handleApproval(pendingApproval)}>
                                     Approve
                                 </Button>
                             </DataTableCell>
@@ -171,7 +174,7 @@ const ApproveImports = () => {
                     ))}
                 </TableBody>
             </DataTable>
-          </div>
+        </div>
     );
 };
 

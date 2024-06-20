@@ -1,12 +1,11 @@
 import React, { useState, useContext, useEffect } from 'react'
 import { useDataMutation, useAlert, useDataQuery } from '@dhis2/app-runtime'
 import { Button, InputField, SingleSelectField, SingleSelectOption, Transfer } from '@dhis2/ui'
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { generateId } from '../functions/helpers';
-import { fetchMetadataHook } from '../communication/dhis';
 import { MetadataContext } from '../App';
 
-import { Configuration } from '../model/Configuration'
+import { Configuration } from '../model/Configuration.model'
 
 
 /**
@@ -33,22 +32,11 @@ const initializeConfigs: Configuration = {
     orgUnitGroups: [],
     dataSets: [],
     categoryOptionCombos: [],
-    userConfigs: []
+    userConfigs: [],
+    key: ""
 }
 
 const ConfigurationForm: React.FC = () => {
-    const css =
-        `.container {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: top;
-    justify-content: top;
-    font-size: 1rem;
-    margin-left: 5%;
-    max-width: 90%;
-    }`
     /**
      * If key has value then it means that we are editing an existing configuration
      * otherwise we are creating a new configuration.
@@ -80,7 +68,7 @@ const ConfigurationForm: React.FC = () => {
      * TODO: implement the metadatacontext in TS. and make sure there is a default value 
      * to be returned during initialization.
      */
-    const metadata = useContext(MetadataContext).metadata
+    const metadata = useContext(MetadataContext)
 
 
     const [mutate, { loading: saving, error: saveError }] = useDataMutation(createMutation)
@@ -122,9 +110,6 @@ const ConfigurationForm: React.FC = () => {
 
     return (
         <div>
-            <style>
-                {css}
-            </style>
             <div className='container'>
                 {
                     metadata &&
@@ -137,14 +122,14 @@ const ConfigurationForm: React.FC = () => {
                             placeholder='Please provide a name for this configuration' />
                         <br />
                         {
-                            metadata.server_optionSets.map(item => (
+                            metadata.optionSets.map(item => (
                                 item && item.options && item.displayName &&
                                 <SingleSelectField
                                     label={item.displayName}
-                                    selected={configurationObject.optionSets[item.id]}
+                                    selected={configurationObject.optionSets[item.code]}
                                     onChange={e => {
                                         let tempSelectedOptionSets = { ...configurationObject.optionSets }
-                                        tempSelectedOptionSets[item.id] = e.selected
+                                        tempSelectedOptionSets[item.code] = e.selected
                                         setConfigurationField({
                                             field: 'optionSets', value: tempSelectedOptionSets
                                         })
@@ -161,12 +146,17 @@ const ConfigurationForm: React.FC = () => {
                             ))
                         }
                         {
-                            metadata.server_OUGs.length > 0 &&
+                            metadata.organisationUnitGroups.length > 0 &&
                             <>
                                 <br />
                                 Organisation unit groups
                                 <Transfer
-                                    options={metadata.server_OUGs}
+                                    filterable
+                                    options={metadata.organisationUnitGroups
+                                        .map(group => {
+                                            return { value: group.id, label: group.displayName }
+                                        })
+                                    }
                                     selected={configurationObject.orgUnitGroups}
                                     onChange={(e) => {
                                         setConfigurationField({
@@ -178,12 +168,15 @@ const ConfigurationForm: React.FC = () => {
                             </>
                         }
                         {
-                            metadata.server_dataSets.length > 0 &&
+                            metadata.dataSets.length > 0 &&
                             <>
                                 <br />
                                 Data sets
                                 <Transfer
-                                    options={metadata.server_dataSets}
+                                    filterable
+                                    options={metadata.dataSets.map(
+                                        ds => { return { label: ds.displayName, value: ds.id } }
+                                    )}
                                     selected={configurationObject.dataSets}
                                     onChange={(e) => {
                                         setConfigurationField(
@@ -196,12 +189,15 @@ const ConfigurationForm: React.FC = () => {
                             </>
                         }
                         {
-                            metadata.server_categoryOptions.length > 0 &&
+                            metadata.categoryOptions.length > 0 &&
                             <>
                                 <br />
                                 Cateory options
                                 <Transfer
-                                    options={metadata.server_categoryOptions}
+                                    filterable
+                                    options={metadata.categoryOptions.map(co => {
+                                        return { label: co.displayName, value: co.id }
+                                    })}
                                     selected={configurationObject.categoryOptionCombos}
                                     onChange={(e) => {
                                         setConfigurationField({
@@ -214,7 +210,7 @@ const ConfigurationForm: React.FC = () => {
                         }
 
                         {
-                            configurationObject.userConfigs.length > 0 && metadata.server_userRoles.length > 0 && metadata.server_userGroups.length > 0 &&
+                            configurationObject.userConfigs.length > 0 && metadata.userRoles.length > 0 && metadata.userGroups.length > 0 &&
                             configurationObject.userConfigs.map(
                                 (userConfig, index) => {
                                     return (
@@ -239,7 +235,10 @@ const ConfigurationForm: React.FC = () => {
                                             <br />
                                             User Groups
                                             <Transfer
-                                                options={metadata.server_userGroups}
+                                                filterable
+                                                options={metadata.userGroups.map(ug => {
+                                                    return { label: ug.displayName, value: ug.id }
+                                                })}
                                                 selected={userConfig.userGroups}
                                                 onChange={(e) => {
                                                     let temp = [...configurationObject.userConfigs]
@@ -253,7 +252,10 @@ const ConfigurationForm: React.FC = () => {
                                             <br />
                                             User Roles
                                             <Transfer
-                                                options={metadata.server_userRoles}
+                                                filterable
+                                                options={metadata.userRoles.map(ur => {
+                                                    return { label: ur.displayName, value: ur.id }
+                                                })}
                                                 selected={userConfig.userRoles}
                                                 onChange={(e) => {
                                                     let temp = [...configurationObject.userConfigs]

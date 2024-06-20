@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { useDataQuery, useDataMutation, useAlert } from '@dhis2/app-runtime'
 
-import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, Modal, ModalTitle, TableBody, TableFoot, TableHead } from '@dhis2/ui'
+import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, TableBody, TableFoot, TableHead } from '@dhis2/ui'
 import { useNavigate } from 'react-router-dom'
 import { CustomModal } from './CustomModal'
-import { ConfigurationCondensed } from '../model/Configuration'
+import { ConfigurationCondensed } from '../model/Configuration.model'
 const query = {
     configurations: {
         resource: 'dataStore/Dhis2-MFR',
@@ -23,18 +23,7 @@ const deleteMutation = {
 
 
 const ConfigurationList = () => {
-    const css =
-        `.container {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: top;
-    justify-content: top;
-    font-size: 1rem;
-    margin-left: 5%;
-    max-width: 90%;
-    }`
+
     const navigate = useNavigate()
 
     const [showModal, setShowModal] = useState(false);
@@ -49,9 +38,6 @@ const ConfigurationList = () => {
 
     return (
         <div>
-            <style>
-                {css}
-            </style>
             <div className='container'>
                 <h1>Configurations</h1>
                 {

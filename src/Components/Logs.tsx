@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDataQuery } from '@dhis2/app-runtime';
 import { TableHead, TableBody, DataTableRow, DataTableCell ,DataTable, DataTableColumnHeader } from '@dhis2/ui';
+import { Log } from '../model/Log.model';
 
 const logsQuery = {
     logs: {
@@ -14,7 +15,7 @@ const logsQuery = {
 };
 
 const Logs = () => {
-    const [logs, setLogs] = useState([]);
+    const [logs, setLogs] = useState<Log[]>();
     const { loading, error, data, refetch } = useDataQuery(logsQuery, { lazy: true });
 
     useEffect(() => {
@@ -42,7 +43,7 @@ const Logs = () => {
                     </DataTableRow>
                 </TableHead>
                 <TableBody>
-                    {logs.map(log => (
+                    {logs?.map(log => (
                         <DataTableRow key={log.timestamp}>
                                                 
                             <DataTableCell>{new Date(log.timestamp).toLocaleString()}</DataTableCell>
