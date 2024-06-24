@@ -1,8 +1,15 @@
 import { useDataQuery } from "@dhis2/app-runtime"
 import { MFR_OPTION_SETS_ATTRIBUTE_CODE } from "../functions/constants"
-import { Metadata } from "../model/Metadata.model"
+import { Metadata, getEmptyMetadata } from "../model/Metadata.model"
 
 const query = {
+    me: {
+        resource: 'me',
+        params: {
+            fields: 'id,displayName,organisationUnits[id,displayName,attributeValues[value,attribute[code]]]',
+            paging: false
+        }
+    },
     optionSets: {
         resource: 'optionSets',
         params: {
@@ -58,16 +65,7 @@ const query = {
 export const fetchMetadataHook = () => {
     const { loading, error, data, refetch } = useDataQuery(query)
 
-    let metadata: Metadata = {
-        categoryOptions: [],
-        configurations: [],
-        dataSets: [],
-        options: [],
-        optionSets: [],
-        organisationUnitGroups: [],
-        userGroups: [],
-        userRoles: []
-    }
+    let metadata = getEmptyMetadata();
 
     if (data) {
         metadata.organisationUnitGroups = data.organisationUnitGroups?.organisationUnitGroups || []
@@ -76,6 +74,8 @@ export const fetchMetadataHook = () => {
         metadata.userGroups = data.userGroups?.userGroups || []
         metadata.categoryOptions = data.categoryOptions?.categoryOptions || []
         metadata.configurations = data.configurations;
+        metadata.me = data.me
+
         data.optionSets?.optionSets.map(optionSet => {
             /**
              * Filter only the ones that are MFR types

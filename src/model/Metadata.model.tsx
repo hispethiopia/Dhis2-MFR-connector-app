@@ -46,6 +46,11 @@ interface OptionSet {
     options: Option[],
 }
 
+interface OrganisationUnitCondensed {
+    id: string,
+    displayName: string
+}
+
 
 interface Metadata {
     organisationUnitGroups: OrganisationUnitGroup[],
@@ -55,7 +60,26 @@ interface Metadata {
     categoryOptions: CategoryOption[],
     optionSets: OptionSet[],
     options: Option[],
-    configurations: Configuration[]
+    configurations: Configuration[],
+    me: {
+        organisationUnits: OrganisationUnitCondensed[],
+    }
+}
+
+const getEmptyMetadata = (): Metadata => {
+    return {
+        categoryOptions: [],
+        configurations: [],
+        organisationUnitGroups: [],
+        dataSets: [],
+        options: [],
+        optionSets: [],
+        userGroups: [],
+        userRoles: [],
+        me: {
+            organisationUnits: []
+        },
+    }
 }
 
 export {
@@ -67,5 +91,6 @@ export {
     CategoryOption,
     Option,
     OptionSet,
-    Metadata
+    Metadata,
+    getEmptyMetadata
 }

@@ -1,25 +1,140 @@
-import React, { useState, useContext } from 'react';
-import { useDataMutation, useAlert } from '@dhis2/app-runtime';
-import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, TableBody, TableHead } from '@dhis2/ui';
-import { mfrObjects, prepareOrganizationsObject } from '../functions/services';
+import React, { useState, useContext, useEffect } from 'react';
+import { useDataMutation, useAlert, useDataQuery } from '@dhis2/app-runtime';
+import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, OrganisationUnitTree, TableBody, TableHead } from '@dhis2/ui';
+import { getApplicableConfigurations, remapMFR, remapUsingId } from '../functions/services';
 import { MFRMapped } from '../model/MFRMapped.model';
 import { MetadataContext } from '../App';
+import { CHANGE_TYPE_CREATE, CHANGE_TYPE_UPDATE, MFR_LOCATION_CODE,MFR_LOCATION_ATTRIBUTE_UID } from '../functions/constants';
+import { CategoryOption, DataSet, OrganisationUnitGroup } from '../model/Metadata.model';
+import { AffectedValues, AllChange, ChangeType, FetchedObjects, User, UserChange } from '../model/Approvals.model';
+import { UserConfig } from '../model/Configuration.model';
+import { ConfirmApproveModal } from './ConfirmApproveModal';
 
-const approvalStatusQuery = {
+const pendingApprovalsQuery = {
     approvalStatus: {
         resource: 'dataStore/Dhis2-MFRApproval',
         params: {
-            fields: 'Key,name,parent,change,changeTo,approvalStatus',
+            fields: '.',
             paging: false,
         },
     },
 };
 
-const createOrganizationMutation = {
-    resource: 'organisationUnits',
-    type: 'create',
-    data: ({ data }) => data
+const userOrgUnitQuery = {
+    organisationUnits: {
+        resource: 'organisationUnits',
+        params: ({ orgUnit }) => ({
+            filter: "id:in:[" + orgUnit + "]",
+            fields: "id,displayName,attributeValues[value,attribute[code]]"
+        })
+    }
 }
+
+
+const checkOrgUnitUsingMFRIDQuery = {
+    organisationUnits: {
+        resource: 'organisationUnits',
+        params: ({ mfrId }) => ({
+            filter: [
+                "attributeValues.attribute.id:eq:" + MFR_LOCATION_ATTRIBUTE_UID,
+                , "attributeValues.value:eq:" + mfrId
+            ],
+            fields: "id"
+        })
+
+    }
+}
+
+const usersQuery = {
+    users: {
+        resource: 'users',
+        params: ({ ids }) => ({
+            filter: "id:in:[" + ids + "]",
+            fields: "*",
+            paging: false
+        })
+    }
+}
+
+const userRolesQuery = {
+    userRoles: {
+        resource: 'userRoles',
+        params: ({ ids }) => ({
+            filter: "id:in:[" + ids + "]",
+            fields: "*",
+            paging: false
+        })
+    }
+}
+
+const userGroupsQuery = {
+    userGroups: {
+        resource: 'userGroups',
+        params: ({ ids }) => ({
+            filter: "id:in:[" + ids + "]",
+            fields: "*",
+            paging: false
+        })
+    }
+}
+
+const dataSetsQuery = {
+    dataSets: {
+        resource: 'dataSets',
+        params: ({ ids }) => ({
+            filter: "id:in:[" + ids + "]",
+            fields: "*",
+            paging: false
+        })
+    }
+}
+
+const organisationUnitGroupsQuery = {
+    organisationUnitGroups: {
+        resource: 'organisationUnitGroups',
+        params: ({ ids }) => ({
+            filter: "id:in:[" + ids + "]",
+            fields: "*",
+            paging: false
+        })
+    }
+}
+
+const categoryOptionsQuery = {
+    categoryOptions: {
+        resource: 'categoryOptions',
+        params: ({ ids }) => ({
+            filter: "id:in:[" + ids + "]",
+            fields: "*",
+            paging: false
+        })
+    }
+}
+
+
+const detailedOrgUnitQuery = {
+    organisationUnits: {
+        resource: "organisationUnits",
+        params: ({ mfrId }) => ({
+            filter: [
+                "attributeValues.attribute.id:eq:" + MFR_LOCATION_ATTRIBUTE_UID,
+                "attributeValues.value:eq:" + mfrId
+            ],
+            fields: "*,users[id,organisationUnits,username,userGroups[id,displayName],userRoles[id,displayName]],dataSets[id,displayName],organisationUnitGroups[id,displayName]"
+        })
+    }
+}
+
+const categoryOptionsFromOrgUnitQuery = {
+    categoryOptions: {
+        resource: "categoryOptions",
+        params: ({ orgUnitId }) => ({
+            filter: "organisationUnits.id:eq:" + orgUnitId,
+            fields: "id,displayName"
+        })
+    }
+}
+
 
 const updateApprovalStatusMutation = {
     resource: 'dataStore/Dhis2-MFRApproval',
@@ -35,92 +150,305 @@ const updateApprovalStatusMutation = {
 };
 
 const ApproveImports = () => {
-    const [pendingApprovals, setPendingApprovals] = useState<MFRMapped[]>(mfrObjects);
     const metadata = useContext(MetadataContext)
+    const [finishedLoading, setFinishedLoading] = useState(false)
+    const [pendingApprovals, setPendingApprovals] = useState<MFRMapped[]>();
+
+    let userOrgUnitIds = metadata.me.organisationUnits.map(orgUnit => { return orgUnit.id })
+    const { refetch: checkOrgUnitUsingMFRIDRefetch } = useDataQuery(checkOrgUnitUsingMFRIDQuery, { lazy: true })
+    const { refetch: organisationUnitDetailedRefetch } = useDataQuery(detailedOrgUnitQuery, { lazy: true })
+    const { refetch: getCategoryOptionsFromOrgUnitRefetch } = useDataQuery(categoryOptionsFromOrgUnitQuery, { lazy: true })
+
+    const { refetch: organisationUnitGroupsRefetch } = useDataQuery(organisationUnitGroupsQuery, { lazy: true })
+    const { refetch: categoryOptionsRefetch } = useDataQuery(categoryOptionsQuery, { lazy: true })
+    const { refetch: dataSetsRefetch } = useDataQuery(dataSetsQuery, { lazy: true })
+    const { refetch: usersRefetch } = useDataQuery(usersQuery, { lazy: true })
+
+
+    const { loading: loadingUserOrgUnits, error: errorUserOrgUnits, data: userOrgUnits } = useDataQuery(userOrgUnitQuery, {
+        variables: { orgUnit: userOrgUnitIds }
+    })
+
+    const [allChanges, setAllChanges] = useState<AllChange>();
+    const [fetchedObjects, setFetchedObjects] = useState<FetchedObjects>();
+    const [selectedApproval, setSelectedApproval] = useState<MFRMapped>();
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [parentOrgUnitId, setParentOrgUnitId] = useState("");
+
+
+    //fetch the mfr ids of the userOrgUnits to fetch from approval.
+
+
+    //Get pending approvals from query
+    //First get my orgUnit to fetch using the key.
+
     const [showLogs, setShowLogs] = useState(false);
     const [refreshLogs, setRefreshLogs] = useState(false);
     const [filterValue, setFilterValue] = useState('');
-    const [mutate] = useDataMutation(createOrganizationMutation);
+
+
     const successAlert = useAlert('Approval status updated successfully!', { duration: 3000 });
     const errorAlert = useAlert('Failed to update approval status', { critical: true });
 
-    console.log("Melaeke mfr objects are ", mfrObjects, metadata)
 
-    /*useEffect(() => {
-        if (metadata && dataStatus) {
 
-            const pending = metadata.configurations.map(config => {
-                const status = dataStatus.approvalStatus.find(status => status.key === config.key);
-                const key = config.key || generateId(11);
-                return {
-                    ...config,
-                    key,
-                    approvalStatus: status ? status.approvalStatus : 'pending',
-                    parent: status?.parent || '',
-                    change: status?.change || '',
-                    changeTo: status?.changeTo || ''
-                };
+    /**
+     * TODO: instead of getting all pending approvals and then filtering only those that apply to the user,
+     * filter the appprovals from the server that only apply to the user.
+     */
+    const { loading: loadingPendingApprovals, error: errorPendingApprovals, data: allApprovals, refetch: refetchPendingApprovals } = useDataQuery(pendingApprovalsQuery)
+
+    useEffect(() => {
+        const doSequential = async () => {
+
+            //Now all approvals are loaded.
+            let userOrgUnitMFRIds: string[] = []
+            userOrgUnits.organisationUnits.organisationUnits.forEach(userOrgUnit => {
+                userOrgUnit.attributeValues.forEach(attVal => {
+                    if (attVal.attribute.code === MFR_LOCATION_CODE) {
+                        userOrgUnitMFRIds.push(attVal.value)
+                    }
+                })
+            })
+
+            let mappedApprovals = remapMFR(allApprovals.approvalStatus)
+            //Now filter the approvals to only the ones that are applicable for this user only.
+            const appropriateApprovals = mappedApprovals.filter(approval => {
+                return userOrgUnitMFRIds.some(userOrgUnitMFRId => approval.reportingHierarchyId ? approval.reportingHierarchyId.includes(userOrgUnitMFRId) : false)
             });
-            setPendingApprovals(pending);
+
+            for (let approval of appropriateApprovals) {
+                //Look for the parent 
+                const parentMFRID = approval.reportingHierarchyId.split('/')[1]
+                try {
+                    let response = await checkOrgUnitUsingMFRIDRefetch({ mfrId: parentMFRID })
+                    if (response.organisationUnits.organisationUnits.length === 0) {
+                        approval.parentExists = false;
+                        continue;
+                    }
+                    approval.parentDHISId = response.organisationUnits.organisationUnits[0].id
+                    approval.parentExists = true;
+                }
+                catch (err) {
+                    console.error("Error: ", err)
+                }
+            }
+            setPendingApprovals(appropriateApprovals)
+            setFinishedLoading(true)
         }
-    }, [metadata, dataStatus]);*/
+        if (userOrgUnits && allApprovals && !finishedLoading) {
+            doSequential();
+        }
+    }, [userOrgUnits, allApprovals])
+
+
+    const getChanges = async (mfrObject: MFRMapped): Promise<AllChange | null> => {
+        try {
+            const orgUnitResponse = await organisationUnitDetailedRefetch({ mfrId: mfrObject.mfrId })
+            let existingOrgUnit = orgUnitResponse.organisationUnits.organisationUnits.length > 0 ? orgUnitResponse.organisationUnits.organisationUnits[0] : null
+            let applicableConfigurations = getApplicableConfigurations(metadata.configurations, mfrObject)
+
+
+            let dataSetsToBeAssigned: string[] = []
+            let ougsTobeAssigned: string[] = []
+            let catCombosToBeAssigned: string[] = []
+            let userConfigsToBeAssigned: UserConfig[] = []
+
+            applicableConfigurations.forEach(conf => {
+                catCombosToBeAssigned.push(...conf.categoryOptionCombos);
+                dataSetsToBeAssigned.push(...conf.dataSets)
+                ougsTobeAssigned.push(...conf.orgUnitGroups)
+                userConfigsToBeAssigned.push(...conf.userConfigs)
+            });
+
+            //This is objects to unassign from existing orgUnit, if the orgUnit exists already.
+            let unasignedObjects: AffectedValues = {
+                dataSets: [],
+                categoryOptions: [],
+                users: [],
+                organisationUnitGroups: []
+            }
+            let unChangedObjects: AffectedValues = {
+                dataSets: [],
+                categoryOptions: [],
+                users: [],
+                organisationUnitGroups: []
+            }
+            let changedUsers: UserChange[] = [];
+            if (existingOrgUnit) {
+                //Get the metadata that are already assigned and check which one doesn't meet the current criteria.
+                existingOrgUnit.dataSets.forEach((ds: DataSet) => {
+                    if (!dataSetsToBeAssigned.includes(ds.id)) {
+                        unasignedObjects.dataSets.push(ds.id);
+                    } else {
+                        unChangedObjects.dataSets.push(ds.id)
+                    }
+                })
+
+                existingOrgUnit.organisationUnitGroups.forEach((orgUnitGroup: OrganisationUnitGroup) => {
+                    if (!ougsTobeAssigned.includes(orgUnitGroup.id)) {
+                        unasignedObjects.organisationUnitGroups.push(orgUnitGroup.id)
+                    } else {
+                        unChangedObjects.organisationUnitGroups.push(orgUnitGroup.id)
+                    }
+                })
+                let categoryOptions = await getCategoryOptionsFromOrgUnitRefetch({ orgUnitId: existingOrgUnit.id })
+                categoryOptions.categoryOptions.categoryOptions.forEach((co: CategoryOption) => {
+                    if (!catCombosToBeAssigned.includes(co.id)) {
+                        unasignedObjects.categoryOptions.push(co.id)
+                    } else {
+                        unChangedObjects.categoryOptions.push(co.id)
+                    }
+                })
+
+                existingOrgUnit.users.forEach((user: User) => {
+                    //find the configuration for this user.
+                    let configurationFound = false;
+                    userConfigsToBeAssigned.forEach((userConfig) => {
+                        if (user.username.endsWith(userConfig.suffix)) {
+                            //If the suffix is found, then the user has been found. 
+                            //let userChanges = getUserChange(userConfig, user)
+                            changedUsers.push({ userConfig, userId: user.id, userName: user.username })
+                            configurationFound = true;
+                        }
+                    });
+                    if (!configurationFound) {
+                        // This means that the user is not found on any configuration. Therefore, unassign this user from this orgUnit.
+                        unasignedObjects.users.push(user);
+                    }
+                })
+            }
+
+            //Filter users to create.
+
+            let usersToCreate = userConfigsToBeAssigned.filter(userConfig => {
+                let userNotFound = true;
+                changedUsers.forEach(userChange => {
+                    if (userChange.userName.endsWith(userConfig.suffix)) {
+                        userNotFound = false;
+                        return userNotFound;
+                    }
+                })
+                return userNotFound;
+            })
+
+            /**
+             * find the change type  
+             */
+            let changeType: ChangeType = existingOrgUnit ? CHANGE_TYPE_UPDATE : CHANGE_TYPE_CREATE;
+
+            let allChange: AllChange = {
+                newAssignments: {
+                    dataSetsToAssign: dataSetsToBeAssigned.filter(ds => !unChangedObjects.dataSets.includes(ds)),
+                    cocToAssign: catCombosToBeAssigned.filter(ds => !unChangedObjects.categoryOptions.includes(ds)),
+                    ougToAssign: ougsTobeAssigned.filter(ds => !unChangedObjects.organisationUnitGroups.includes(ds)),
+                    usersToCreate: usersToCreate
+                },
+                unassigns: {
+                    coc: unasignedObjects.categoryOptions,
+                    dataSets: unasignedObjects.dataSets,
+                    oug: unasignedObjects.organisationUnitGroups,
+                    users: unasignedObjects.users
+                },
+                unChangedAssignments: {
+                    coc: unChangedObjects.categoryOptions,
+                    dataSets: unChangedObjects.dataSets,
+                    oug: unChangedObjects.organisationUnitGroups,
+                    users: []
+                },
+                changedUsers: changedUsers,
+                changeType: changeType,
+                dhisOrgUnitObject: existingOrgUnit,
+            }
+
+            return allChange
+        } catch (err) {
+            console.error(err)
+        }
+        return null;
+    }
 
     const handleApproval = async (mfrObject: MFRMapped) => {
-        console.log("Config inside handleApproval:", mfrObject);
-        const key = mfrObject.mfrId;
-        if (!key) {
-            console.error("Invalid key:", key);
+        let changes = await getChanges(mfrObject)
+        if (!changes) {
+            //TODO show error here.
+            console.error("Error has occured")
             return;
         }
 
-        try {
+        //Now we got all the changes to implement.
+        //Now that the change is known, fetch all the affected metadatas
+        //We need to get all metadata except unchanged ones. 
 
-            //Prepare the DHIS2 object based on configurations.
-            let organizations = prepareOrganizationsObject(
-                metadata?.configurations,
-                mfrObject,
-                "b3aCK1PTn5S"
-            )
+        let dataSetsToFetch: string[] = [];
+        let orgUnitGroupsToFetch: string[] = []
+        let categoryOptionsToFetch: string[] = []
+        let usersToFetch: string[] = []
+        let userRolesToFetch: string[] = []
+        let userGroupsToFetch: string[] = []
 
-            console.log("About to mutate orgUnits to send is ", organizations)
+        dataSetsToFetch.push(...changes?.newAssignments.dataSetsToAssign)
+        dataSetsToFetch.push(...changes.unassigns.dataSets)
 
-            await mutate({//Here change the key of the mutate to path.
-                //First check if the parent ID exists.
-                key,
-                data: organizations
-            });
-            console.log('Mutation successful!');
-            /*
-                        setPendingApprovals(prev =>
-                            prev.map(c => (c.key === config.key ? { ...c, approvalStatus: status } : c))
-                        );
-            
-                        setShowLogs(true);
-                        successAlert.show();
-                        refetch();
-                        setRefreshLogs(prev => !prev);*/
-        } catch (error) {
-            console.error('Error updating approval status:', error);
-            errorAlert.show();
-        }
+        orgUnitGroupsToFetch.push(...changes?.newAssignments.ougToAssign)
+        orgUnitGroupsToFetch.push(...changes?.unassigns.oug)
+
+        categoryOptionsToFetch.push(...changes?.newAssignments.cocToAssign)
+        categoryOptionsToFetch.push(...changes?.unassigns.coc)
+
+        usersToFetch.push(...changes.unassigns.users.map(user => user.id))
+        usersToFetch.push(...changes.changedUsers.map(userChange => userChange.userId))
+
+        changes.newAssignments.usersToCreate.forEach(config => {
+            userRolesToFetch.push(...config.userRoles)
+            userGroupsToFetch.push(...config.userGroups)
+        })
+
+        changes.unassigns.users.forEach(user => {
+            userRolesToFetch.push(...user.userRoles.map(ur => ur.id))
+            userGroupsToFetch.push(...user.userGroups.map(ug => ug.id))
+        })
+
+        changes.changedUsers.forEach(userChange => {
+            userRolesToFetch.push(...userChange.userConfig.userRoles)
+            userGroupsToFetch.push(...userChange.userConfig.userGroups)
+        })
+
+
+        /**
+         * Making it into a set inorder to remove duplicates.
+         */
+        let orgUnitGroupsResponse = await organisationUnitGroupsRefetch({ ids: [...new Set(orgUnitGroupsToFetch)].join(',') })
+        let dataSetResponse = await dataSetsRefetch({ ids: [...new Set(dataSetsToFetch)].join(',') })
+        let categoryOptionsResponse = await categoryOptionsRefetch({ ids: [...new Set(categoryOptionsToFetch)].join(',') })
+        let usersResponse = await usersRefetch({ ids: [...new Set(usersToFetch)].join(',') })
+
+        remapUsingId(orgUnitGroupsResponse.organisationUnitGroups.organisationUnitGroups)
+        remapUsingId(dataSetResponse.dataSets.dataSets)
+        remapUsingId(categoryOptionsResponse.categoryOptions.categoryOptions)
+        remapUsingId(usersResponse.users.users)
+
+        //Now I have all the objects, I can start the changes now.
+        setParentOrgUnitId(mfrObject.parentDHISId ?? "")
+
+        setAllChanges(changes)
+        setFetchedObjects({
+            orgUnitGroups: orgUnitGroupsResponse.organisationUnitGroups.organisationUnitGroups,
+            dataSets: dataSetResponse.dataSets.dataSets,
+            categoryOptions: categoryOptionsResponse.categoryOptions.categoryOptions,
+            users: usersResponse.users.users
+        })
+
+        setSelectedApproval(mfrObject)
+        setShowConfirmModal(true)
+
+        return;
     };
-
-    /*const filteredApprovals = pendingApprovals.filter(config =>
-        config.name.toLowerCase().includes(filterValue.toLowerCase()) /*||
-        /*config.parent.toLowerCase().includes(filterValue.toLowerCase()) ||
-        config.change.toLowerCase().includes(filterValue.toLowerCase()) ||
-        config.changeTo.toLowerCase().includes(filterValue.toLowerCase()) ||
-        config.approvalStatus.toLowerCase().includes(filterValue.toLowerCase())
-    );*/
 
     const handleFilterChange = event => {
         setFilterValue(event.target.value);
     };
 
-    /*if (loadingMetadata || loadingStatus) return <span>Loading...</span>;
-    if (errorMetadata || errorStatus) return <span>ERROR: {errorMetadata?.message || errorStatus?.message}</span>;
-    if (!metadata || !dataStatus) return <span>No configurations available</span>;
-*/
     return (
         <div className='container'>
             <h1>Pending Imports</h1>
@@ -129,51 +457,78 @@ const ApproveImports = () => {
                 placeholder="Search..."
                 value={filterValue}
                 onChange={handleFilterChange}
-            />
-            <DataTable>
-                <TableHead>
-                    <DataTableRow>
-                        <DataTableColumnHeader>
-                            Name
-                        </DataTableColumnHeader>
-                        <DataTableColumnHeader>
-                            Parent
-                        </DataTableColumnHeader>
-                        <DataTableColumnHeader>
-                            Change
-                        </DataTableColumnHeader>
-                        <DataTableColumnHeader>
-                            Change To
-                        </DataTableColumnHeader>
-                        <DataTableColumnHeader>
-                            Approval Status
-                        </DataTableColumnHeader>
-                        <DataTableColumnHeader>Reject</DataTableColumnHeader>
-                        <DataTableColumnHeader>Approve</DataTableColumnHeader>
-                    </DataTableRow>
-                </TableHead>
-                <TableBody>
-                    {pendingApprovals.map((pendingApproval, index) => (
-                        <DataTableRow key={pendingApproval.mfrId}>
-                            <DataTableCell>{pendingApproval.name}</DataTableCell>
-                            <DataTableCell>{pendingApproval.lastUdated}</DataTableCell>
-                            <DataTableCell>{pendingApproval.FT}</DataTableCell>
-                            <DataTableCell>{"Create"}</DataTableCell>
-                            <DataTableCell>{"Not Approved"}</DataTableCell>
-                            <DataTableCell>
-                                <Button secondary onClick={() => handleApproval(pendingApproval)}>
-                                    Reject
-                                </Button>
-                            </DataTableCell>
-                            <DataTableCell>
-                                <Button primary onClick={() => handleApproval(pendingApproval)}>
-                                    Approve
-                                </Button>
-                            </DataTableCell>
+            />{
+                finishedLoading &&
+                <DataTable>
+                    <TableHead>
+                        <DataTableRow>
+                            <DataTableColumnHeader>
+                                Name
+                            </DataTableColumnHeader>
+                            <DataTableColumnHeader>
+                                Parent
+                            </DataTableColumnHeader>
+                            <DataTableColumnHeader>
+                                Change
+                            </DataTableColumnHeader>
+                            <DataTableColumnHeader>
+                                Change To
+                            </DataTableColumnHeader>
+                            <DataTableColumnHeader>
+                                Approval Status
+                            </DataTableColumnHeader>
+                            <DataTableColumnHeader>Reject</DataTableColumnHeader>
+                            <DataTableColumnHeader>Approve</DataTableColumnHeader>
                         </DataTableRow>
-                    ))}
-                </TableBody>
-            </DataTable>
+                    </TableHead>
+                    <TableBody>
+                        {pendingApprovals?.map((pendingApproval, index) => (
+                            <DataTableRow key={pendingApproval.mfrId}>
+                                <DataTableCell>{pendingApproval.name}</DataTableCell>
+                                <DataTableCell>{pendingApproval.lastUpdated?.toISOString()}</DataTableCell>
+                                <DataTableCell>{pendingApproval.FT}</DataTableCell>
+                                <DataTableCell>{pendingApproval.changeType}</DataTableCell>
+                                <DataTableCell>{"Not Approved"}</DataTableCell>
+                                <DataTableCell>
+                                    <Button secondary onClick={() => handleApproval(pendingApproval)}>
+                                        Reject
+                                    </Button>
+                                </DataTableCell>
+                                <DataTableCell>
+                                    <Button title={!pendingApproval.parentExists ? "Parent doesn't exist" : "Approve"}
+                                        disabled={!pendingApproval.parentExists} primary onClick={() => handleApproval(pendingApproval)}>
+                                        Approve
+                                    </Button>
+                                </DataTableCell>
+                            </DataTableRow>
+                        ))}
+                    </TableBody>
+                </DataTable>
+            }
+            {
+                showConfirmModal &&
+                <ConfirmApproveModal
+                    allChanges={allChanges}
+                    fetchedObjects={fetchedObjects}
+                    parentOrgUnitId={parentOrgUnitId}
+                    selectedApproval={selectedApproval ? selectedApproval : null}
+                    onAccept={async () => {
+                        //do the actual deletion here.
+                        /*
+                                                await mutate({ id: itemToDelete?.key })
+                                                setShowModal(false)
+                                                setItemToDelete(null)
+                                                refetch();
+                                                successAlert.show();*/
+                    }}
+                    onReject={() => {
+                        setShowConfirmModal(false)
+                        setAllChanges(undefined)
+                        setFetchedObjects(undefined)
+                    }}
+                />
+
+            }
         </div>
     );
 };

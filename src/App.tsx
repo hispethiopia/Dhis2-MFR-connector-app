@@ -6,19 +6,10 @@ import Logs from './Components/Logs'
 import { Navigation } from './navigation/Navigation'
 import { fetchMetadataHook } from './communication/dhis'
 import ConfigurationForm from './Components/ConfigurationForm'
-import { Metadata } from './model/Metadata.model'
+import { Metadata, getEmptyMetadata } from './model/Metadata.model'
 
-const emptyMetadata = {
-    categoryOptions: [],
-    configurations: [],
-    organisationUnitGroups: [],
-    dataSets: [],
-    options: [],
-    optionSets: [],
-    userGroups: [],
-    userRoles: [],
-}
-export const MetadataContext = React.createContext<Metadata>(emptyMetadata)
+
+export const MetadataContext = React.createContext<Metadata>(getEmptyMetadata())
 
 const App = () => {
     const { loading, error, data: metadata } = fetchMetadataHook();
@@ -61,14 +52,13 @@ const App = () => {
 }`
     return (
         <div>
-
             <style>
                 {css}
             </style>
             {
                 !loading && metadata &&
 
-                <MetadataContext.Provider value={metadata === null ? emptyMetadata : metadata}>
+                <MetadataContext.Provider value={metadata}>
                     {
                         error ?
                             <span>ERROR</span>
