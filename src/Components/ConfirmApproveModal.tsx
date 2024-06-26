@@ -5,8 +5,10 @@ import { AllChange, FetchedObjects } from '../model/Approvals.model';
 import { MFRMapped } from '../model/MFRMapped.model';
 import { generateId, generatePassword } from '../functions/helpers';
 import { UserConfig } from '../model/Configuration.model';
-import { CHANGE_TYPE_CREATE, CHANGE_TYPE_DISABLE, MFR_LOCATION_ATTRIBUTE_UID, MFR_OPTION_SETS_ATTRIBUTE_CODE, mfrMapping } from '../functions/constants';
+import { CHANGE_TYPE_CREATE, CHANGE_TYPE_DISABLE, MFR_LOCATION_ATTRIBUTE_UID, MFR_OPTION_SETS_ATTRIBUTE_CODE, USER_GROUPS_TO_SEND_MESSAGE, mfrMapping } from '../functions/constants';
 import { FullScreenLoader } from './FullScreenLoader';
+import { Message } from '../model/Message.model';
+import { useLoggingContext } from './Logging';
 
 interface ModalProps {
     allChanges: AllChange | undefined;
@@ -44,6 +46,8 @@ const maintainAssignment = (props: MetadataAssignmentProps) => {
     })
     return payload;
 }
+
+
 
 
 const createOrgUnit = (mfrObject: MFRMapped | null) => {
@@ -112,6 +116,12 @@ const updateMetadata = {
     data: ({ data }) => data
 }
 
+const createMessageMutation = {
+    resource: "messageConversations",
+    type: 'create',
+    data: ({data}) => data,
+}
+
 
 export const ConfirmApproveModal: React.FC<ModalProps> = ({
     allChanges, fetchedObjects, onAccept, onReject, selectedApproval, parentOrgUnitId
@@ -121,6 +131,10 @@ export const ConfirmApproveModal: React.FC<ModalProps> = ({
     const [orgUnitMutation] = useDataMutation(createOrganizationMutation);
     const [metadataMutation] = useDataMutation(updateMetadata);
     const [anyLoading, setAnyLoading] = useState(false)
+    const [messageMutation] = useDataMutation(createMessageMutation)
+
+    const { showAndSaveLog, showLogOnly } = useLoggingContext();
+
 
 
     const handleApprove = async () => {
@@ -245,10 +259,32 @@ export const ConfirmApproveModal: React.FC<ModalProps> = ({
 
             await metadataMutation({ data: metadata })
 
+            if (usersToCreate.length > 0) {
+                let messageText = usersToCreate.map(user => { return `User created:${user.firstName} username:${user.username} password:${user.password}` }).join('\n')
+                let message: Message = {
+                    organisationUnits: [],
+                    subject: "User created",
+                    text: messageText,
+                    userGroups: USER_GROUPS_TO_SEND_MESSAGE,
+                    users: []
+                }
+                await messageMutation({
+                    data: message
+                })
+            }
+
+            showAndSaveLog({
+                id: new Date().toISOString(),
+                logType: 'Success',
+                message: `Successfully created facility ${selectedApproval?.name}`,
+                timestamp: new Date(),
+                username: metadata.me.username
+            })
+
         } catch (e) {
             console.error(e)
-        }finally{
-            
+        } finally {
+
         }
         setAnyLoading(false);
 

@@ -10,6 +10,7 @@ import { AffectedValues, AllChange, ChangeType, FetchedObjects, User, UserChange
 import { UserConfig } from '../model/Configuration.model';
 import { ConfirmApproveModal } from './ConfirmApproveModal';
 import { FullScreenLoader } from './FullScreenLoader';
+import { useLoggingContext } from './Logging';
 
 const pendingApprovalsQuery = {
     approvalStatus: {
@@ -155,6 +156,8 @@ const ApproveImports = () => {
     const [finishedLoading, setFinishedLoading] = useState(false)
     const [pendingApprovals, setPendingApprovals] = useState<MFRMapped[]>();
     const [anyLoading, setAnyLoading] = useState(true);
+
+    const { showAndSaveLog, showLogOnly } = useLoggingContext();
 
 
     let userOrgUnitIds = metadata.me.organisationUnits.map(orgUnit => { return orgUnit.id })
@@ -315,6 +318,7 @@ const ApproveImports = () => {
         if (userOrgUnits && allApprovals && !finishedLoading) {
             doSequential();
         }
+
     }, [userOrgUnits, allApprovals])
 
 
@@ -463,6 +467,13 @@ const ApproveImports = () => {
         const dataToSend = Array.from(new Set(temp))
         try {
             await uploadRejectedList({ data: dataToSend })
+            await showAndSaveLog({
+                message: `Facility ${rejected ? "Un" : ""}Rejected, mfrCode=${mfrObject.mfrCode}, lastUpdated on mfr=${mfrObject.lastUpdated?.toISOString()}`,
+                id: new Date().toISOString(),
+                logType: 'Log',
+                timestamp: new Date(),
+                username: metadata.me.username
+            })
         } catch (e) {
             console.error("Error uploading rejected list")
         } finally {
@@ -613,9 +624,10 @@ const ApproveImports = () => {
                                                 {!rejected &&
                                                     <Button title={pendingApproval.error ? pendingApproval.errorMessage : "Approve"}
                                                         disabled={pendingApproval.error} primary onClick={
-                                                            () => {
+                                                            async () => {
+                                                                setAnyLoading(true)
                                                                 try {
-                                                                    handleApproval(pendingApproval)
+                                                                    await handleApproval(pendingApproval)
                                                                 } catch (e) {
                                                                     console.log("something went wrong in handle approval", e)
                                                                 }

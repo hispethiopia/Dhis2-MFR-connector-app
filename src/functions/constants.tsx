@@ -7,6 +7,10 @@ export const CHANGE_TYPE_UPDATE = "CHANGE_TYPE_UPDATE"
 export const CHANGE_TYPE_DELETE = "CHANGE_TYPE_DELETE"
 export const CHANGE_TYPE_DISABLE = "CHANGE_TYPE_DISABLE"
 
+export const USER_GROUPS_TO_SEND_MESSAGE=[
+    {id:"sjVAIaP2jZd"}
+]
+
 
 export const USER_CHANGE_TYPES = {
     CHANGE: "CHANGE",

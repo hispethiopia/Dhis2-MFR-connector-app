@@ -1,6 +1,11 @@
+type LogType = 'Error' | 'Success' | 'Log';
+
+
 export interface Log {
-    approvalStatus: string,
-    timestamp: string,
+    //The id is the time
     id: string,
-    name: string,    
+    logType: LogType,
+    username: string,
+    timestamp: Date,
+    message: string,
 }

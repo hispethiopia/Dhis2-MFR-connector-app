@@ -2,12 +2,13 @@ import React from 'react'
 import { HashRouter as Router, Route, Routes } from 'react-router-dom'
 import ConfigurationList from './Components/ConfigurationList'
 import ApproveImports from './Components/ApproveImports'
-import Logs from './Components/Logs'
+import Logs from './Components/Logs.Component'
 import { Navigation } from './navigation/Navigation'
 import { fetchMetadataHook } from './communication/dhis'
 import ConfigurationForm from './Components/ConfigurationForm'
 import { Metadata, getEmptyMetadata } from './model/Metadata.model'
 import { SettingsPage } from './Components/SettingsPage'
+import { LoggingProvider } from './Components/Logging'
 
 
 export const MetadataContext = React.createContext<Metadata>(getEmptyMetadata())
@@ -60,32 +61,34 @@ const App = () => {
                 !loading && metadata &&
 
                 <MetadataContext.Provider value={metadata}>
-                    {
-                        error ?
-                            <span>ERROR</span>
-                            : loading ?
-                                <span>...</span>
-                                : !metadata ?
-                                    <span>No data available</span>
-                                    : <></>
-                    }
-                    <Router>
-                        <div className='navigation'>
-                            <div className='left'>
-                                <Navigation />
+                    <LoggingProvider>
+                        {
+                            error ?
+                                <span>ERROR</span>
+                                : loading ?
+                                    <span>...</span>
+                                    : !metadata ?
+                                        <span>No data available</span>
+                                        : <></>
+                        }
+                        <Router>
+                            <div className='navigation'>
+                                <div className='left'>
+                                    <Navigation />
+                                </div>
+                                <div className='right'>
+                                    <Routes>
+                                        <Route path="/" element={<ConfigurationList />} />
+                                        <Route path="/add" element={<ConfigurationForm />} />
+                                        <Route path="/approveImports" element={<ApproveImports />} />
+                                        <Route path="/logs" element={<Logs />} />
+                                        <Route path="/edit/:Key" element={<ConfigurationForm />} />
+                                        <Route path="/settings" element={<SettingsPage />} />
+                                    </Routes>
+                                </div>
                             </div>
-                            <div className='right'>
-                                <Routes>
-                                    <Route path="/" element={<ConfigurationList />} />
-                                    <Route path="/add" element={<ConfigurationForm />} />
-                                    <Route path="/approveImports" element={<ApproveImports />} />
-                                    <Route path="/logs" element={<Logs />} />
-                                    <Route path="/edit/:Key" element={<ConfigurationForm />} />
-                                    <Route path="/settings" element={<SettingsPage />} />
-                                </Routes>
-                            </div>
-                        </div>
-                    </Router>
+                        </Router>
+                    </LoggingProvider>
                 </MetadataContext.Provider>
             }
         </div>

@@ -6,7 +6,7 @@ const query = {
     me: {
         resource: 'me',
         params: {
-            fields: 'id,displayName,organisationUnits[id,displayName,attributeValues[value,attribute[code]]]',
+            fields: 'id,displayName,username,organisationUnits[id,displayName,attributeValues[value,attribute[code]]]',
             paging: false
         }
     },

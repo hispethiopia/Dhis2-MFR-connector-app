@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useDataQuery } from '@dhis2/app-runtime';
-import { TableHead, TableBody, DataTableRow, DataTableCell ,DataTable, DataTableColumnHeader } from '@dhis2/ui';
+import { TableHead, TableBody, DataTableRow, DataTableCell, DataTable, DataTableColumnHeader, ModalProps } from '@dhis2/ui';
 import { Log } from '../model/Log.model';
 
 const logsQuery = {
     logs: {
-        resource: 'dataStore/Dhis2-MFRApproval',
+        resource: 'dataStore/Dhis2-MFRLogging',
         params: {
-            fields: 'timestamp,message,key,name,Key,approvalStatus',
-            order: 'timestamp:asc',
-            paging: false,
+            fields: '.',
+            order: 'id:asc',
+            paging: true,
         },
     },
 };
@@ -24,7 +24,7 @@ const Logs = () => {
 
     useEffect(() => {
         if (data && data.logs) {
-            setLogs(data.logs);
+            setLogs(data.logs.entries.map(item => item.value));
         }
     }, [data]);
 
@@ -37,18 +37,19 @@ const Logs = () => {
             <DataTable>
                 <TableHead>
                     <DataTableRow>
-                        <DataTableColumnHeader>Timestamp</DataTableColumnHeader>
-                        <DataTableColumnHeader>Name</DataTableColumnHeader>
-                        <DataTableColumnHeader>status</DataTableColumnHeader>
+                        <DataTableColumnHeader>Time</DataTableColumnHeader>
+                        <DataTableColumnHeader>Type</DataTableColumnHeader>
+                        <DataTableColumnHeader>Username</DataTableColumnHeader>
+                        <DataTableColumnHeader>message</DataTableColumnHeader>
                     </DataTableRow>
                 </TableHead>
                 <TableBody>
                     {logs?.map(log => (
-                        <DataTableRow key={log.timestamp}>
-                                                
-                            <DataTableCell>{new Date(log.timestamp).toLocaleString()}</DataTableCell>
-                            <DataTableCell>{log.name}</DataTableCell> 
-                            <DataTableCell>{log.approvalStatus}</DataTableCell>
+                        <DataTableRow key={log.id}>
+                            <DataTableCell>{log.timestamp}</DataTableCell>
+                            <DataTableCell>{log.logType}</DataTableCell>
+                            <DataTableCell>{log.username}</DataTableCell>
+                            <DataTableCell>{log.message}</DataTableCell>
                         </DataTableRow>
                     ))}
                 </TableBody>
