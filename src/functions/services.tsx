@@ -42,8 +42,8 @@ const mfrMapping = {
     oldIdentificationNumber: "resource.extension.FacilityInformation.oldIdentificationNumber",
     ethiopianNationalFacilityId: "resource.extension.FacilityInformation.ethiopianNationalFacilityId",
     hmisCode: "resource.extension.FacilityInformation.hmisCode",
-    echisId: "resource.extension.FacilityInformation.echisId",
-    dhisId: "resource.extension.FacilityInformation.dihsId",
+    mfrCode: "resource.identifier.facilityId",
+    dhisId: "resource.identifier.dhisId",
     facilityId: "resource.extension.FacilityInformation.facilityId",
     operationalStatus: "resource.operationalStatus.display",
     name: "resource.name",
@@ -52,7 +52,10 @@ const mfrMapping = {
     latitude: "resource.position.latitude",
     altitude: "resource.position.altitude",
     managingOrganization: "resource.managingOrganization.reference",
-    isPHCU: ""
+    isPHCU: "resource.extension.FacilityInformation.isPrimaryHealthCareUnit",
+    isParentPHCU:"isParentPHCU",
+    reportingHierarchyName:"resource.extension.reportingHierarchy"
+
 }
 
 export const remapMFR = (mfrObjects: any[]): MFRMapped[] => {
@@ -87,6 +90,19 @@ export const remapMFR = (mfrObjects: any[]): MFRMapped[] => {
     })
 }
 
+export const remapAttributeValues = (objects)=>{
+    objects.forEach(obj => {
+        obj.attributeValues.forEach(attVal=>{
+            if(attVal.attribute.id){
+                obj.attributeValues[attVal.attribute.id] = attVal.value
+            }
+            if(attVal.attribute.code){
+                obj.attributeValues[attVal.attribute.code] = attVal.value
+            }
+        })
+    });
+}
+
 export const getApplicableConfigurations = (
     allConfigurations: Configuration[],
     approvedObject: MFRMapped,
@@ -96,7 +112,7 @@ export const getApplicableConfigurations = (
         let allOptionsTrue = true;
         Object.keys(config.optionSets).forEach(option => {
             //If there is one option that doesn't satisfy then ignore that configuration.
-            if (config.optionSets[option] !== approvedObject[option]) {
+            if (config.optionSets[option] !== approvedObject[option].toString()) {
                 allOptionsTrue = false;
             }
         })

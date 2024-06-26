@@ -7,6 +7,7 @@ import { Navigation } from './navigation/Navigation'
 import { fetchMetadataHook } from './communication/dhis'
 import ConfigurationForm from './Components/ConfigurationForm'
 import { Metadata, getEmptyMetadata } from './model/Metadata.model'
+import { SettingsPage } from './Components/SettingsPage'
 
 
 export const MetadataContext = React.createContext<Metadata>(getEmptyMetadata())
@@ -80,6 +81,7 @@ const App = () => {
                                     <Route path="/approveImports" element={<ApproveImports />} />
                                     <Route path="/logs" element={<Logs />} />
                                     <Route path="/edit/:Key" element={<ConfigurationForm />} />
+                                    <Route path="/settings" element={<SettingsPage />} />
                                 </Routes>
                             </div>
                         </div>

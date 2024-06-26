@@ -1,14 +1,15 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { useDataMutation, useAlert, useDataQuery } from '@dhis2/app-runtime';
-import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, OrganisationUnitTree, TableBody, TableHead } from '@dhis2/ui';
-import { getApplicableConfigurations, remapMFR, remapUsingId } from '../functions/services';
+import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, Switch, TableBody, TableHead } from '@dhis2/ui';
+import { getApplicableConfigurations, remapAttributeValues, remapMFR, remapUsingId } from '../functions/services';
 import { MFRMapped } from '../model/MFRMapped.model';
 import { MetadataContext } from '../App';
-import { CHANGE_TYPE_CREATE, CHANGE_TYPE_UPDATE, MFR_LOCATION_CODE,MFR_LOCATION_ATTRIBUTE_UID } from '../functions/constants';
+import { CHANGE_TYPE_CREATE, CHANGE_TYPE_UPDATE, MFR_LOCATION_CODE, MFR_LOCATION_ATTRIBUTE_UID } from '../functions/constants';
 import { CategoryOption, DataSet, OrganisationUnitGroup } from '../model/Metadata.model';
 import { AffectedValues, AllChange, ChangeType, FetchedObjects, User, UserChange } from '../model/Approvals.model';
 import { UserConfig } from '../model/Configuration.model';
 import { ConfirmApproveModal } from './ConfirmApproveModal';
+import { FullScreenLoader } from './FullScreenLoader';
 
 const pendingApprovalsQuery = {
     approvalStatus: {
@@ -19,6 +20,19 @@ const pendingApprovalsQuery = {
         },
     },
 };
+
+const rejectedListQuery = {
+    rejectedList: {
+        resource: 'dataStore/Dhis2-MFR/rejectedList',
+
+    }
+}
+
+const uploadRejectedListQuery = {
+    resource: 'dataStore/Dhis2-MFR/rejectedList',
+    type: 'update',
+    data: ({ data }) => data
+}
 
 const userOrgUnitQuery = {
     organisationUnits: {
@@ -37,9 +51,9 @@ const checkOrgUnitUsingMFRIDQuery = {
         params: ({ mfrId }) => ({
             filter: [
                 "attributeValues.attribute.id:eq:" + MFR_LOCATION_ATTRIBUTE_UID,
-                , "attributeValues.value:eq:" + mfrId
+                , "attributeValues.value:in:[" + mfrId + "]"
             ],
-            fields: "id"
+            fields: "id,displayName,attributeValues[value,attribute[id,code]]"
         })
 
     }
@@ -136,23 +150,12 @@ const categoryOptionsFromOrgUnitQuery = {
 }
 
 
-const updateApprovalStatusMutation = {
-    resource: 'dataStore/Dhis2-MFRApproval',
-    type: 'update',
-    id: ({ key }) => key,
-    data: ({ approvalStatus, name, parent, change, changeTo }) => ({
-        approvalStatus,
-        name,
-        parent,
-        change,
-        changeTo
-    }),
-};
-
 const ApproveImports = () => {
     const metadata = useContext(MetadataContext)
     const [finishedLoading, setFinishedLoading] = useState(false)
     const [pendingApprovals, setPendingApprovals] = useState<MFRMapped[]>();
+    const [anyLoading, setAnyLoading] = useState(true);
+
 
     let userOrgUnitIds = metadata.me.organisationUnits.map(orgUnit => { return orgUnit.id })
     const { refetch: checkOrgUnitUsingMFRIDRefetch } = useDataQuery(checkOrgUnitUsingMFRIDQuery, { lazy: true })
@@ -164,6 +167,16 @@ const ApproveImports = () => {
     const { refetch: dataSetsRefetch } = useDataQuery(dataSetsQuery, { lazy: true })
     const { refetch: usersRefetch } = useDataQuery(usersQuery, { lazy: true })
 
+    const { loading: loadingRejectedList, data: rejectedList, refetch: getRejectedList } = useDataQuery(rejectedListQuery)
+    const [uploadRejectedList] = useDataMutation(uploadRejectedListQuery)
+
+    const remappedRejectedList = {}
+    if (rejectedList) {
+        rejectedList.rejectedList.forEach(item => {
+            remappedRejectedList[item] = true;
+        })
+    }
+
 
     const { loading: loadingUserOrgUnits, error: errorUserOrgUnits, data: userOrgUnits } = useDataQuery(userOrgUnitQuery, {
         variables: { orgUnit: userOrgUnitIds }
@@ -174,6 +187,7 @@ const ApproveImports = () => {
     const [selectedApproval, setSelectedApproval] = useState<MFRMapped>();
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [parentOrgUnitId, setParentOrgUnitId] = useState("");
+    const [showRejectedList, setShowRejectedList] = useState(false);
 
 
     //fetch the mfr ids of the userOrgUnits to fetch from approval.
@@ -201,6 +215,7 @@ const ApproveImports = () => {
     useEffect(() => {
         const doSequential = async () => {
 
+            setAnyLoading(true);
             //Now all approvals are loaded.
             let userOrgUnitMFRIds: string[] = []
             userOrgUnits.organisationUnits.organisationUnits.forEach(userOrgUnit => {
@@ -212,29 +227,90 @@ const ApproveImports = () => {
             })
 
             let mappedApprovals = remapMFR(allApprovals.approvalStatus)
+            let finalList: MFRMapped[] = []
+            //Now handle PHCUs by creating duplicates for PHCUs, and looking for the parent of the health center.
+            mappedApprovals.forEach(approval => {
+                if (approval.isPHCU) {
+                    //This is a PHCU, therefore we need to handle it's parent PHCU by adding another approval for the PHCU.
+                    let phcuApproval: MFRMapped = { ...approval }
+                    phcuApproval.mfrId = approval.mfrId + "_PHCU"
+                    phcuApproval.facilityId = approval.facilityId + "_PHCU"
+                    phcuApproval.mfrCode = approval.mfrCode + "_PHCU"
+                    phcuApproval.dhisId = ""
+                    //First replace multiple spaces in the name. Not replacing HC with PHCU because just incase hc is not found, PHCU will still be there
+                    phcuApproval.name = (phcuApproval.name).replace(/\s+/g, ' ').replace(/health center/gi, '') + "_PHCU"
+
+                    //PHCU approval already has the _PHCU
+                    phcuApproval.reportingHierarchyId = phcuApproval.mfrId + "/" +
+                        phcuApproval.reportingHierarchyId.split('/').slice(1).join('/')
+                    approval.reportingHierarchyId = approval.mfrId + '/' + phcuApproval.reportingHierarchyId
+
+                    phcuApproval.reportingHierarchyName = phcuApproval.name + "/"
+                        + phcuApproval.reportingHierarchyName.split('/').slice(1).join('/')
+                    approval.reportingHierarchyName = approval.name + "/" + phcuApproval.reportingHierarchyName
+
+                    approval.isPHCU = false;
+                    //Push both PHCU approval and approval.
+                    finalList.push(phcuApproval)
+                }
+                finalList.push(approval)
+            })
             //Now filter the approvals to only the ones that are applicable for this user only.
-            const appropriateApprovals = mappedApprovals.filter(approval => {
+            const appropriateApprovals = finalList.filter(approval => {
                 return userOrgUnitMFRIds.some(userOrgUnitMFRId => approval.reportingHierarchyId ? approval.reportingHierarchyId.includes(userOrgUnitMFRId) : false)
             });
 
+
+
+            //Inorder to do it in chuncks, get orgUnits in chuncks.
+            let dhisOrgUnitIds: string[] = []
+            for (let approval of appropriateApprovals) {
+                dhisOrgUnitIds.push(approval.reportingHierarchyId.split('/')[1])
+                if (approval.dhisId && approval.dhisId !== "") {
+                    dhisOrgUnitIds.push(approval.mfrId)
+                }
+            }
+
+            let dhisOrgUnits: any = {}
+
+            for (let i = 0; i < dhisOrgUnitIds.length; i += 50) {
+                let ids = dhisOrgUnitIds.slice(i, i + 50);
+                let response = await checkOrgUnitUsingMFRIDRefetch({ mfrId: ids.join(',') })
+                remapAttributeValues(response.organisationUnits.organisationUnits)
+
+                //Making it object based so that It can be easily found when searching.
+                response.organisationUnits.organisationUnits.forEach(orgUnit => {
+                    //Mapping both in dhis and mfr for easily finding the objects.
+                    dhisOrgUnits[orgUnit.id] = orgUnit
+                    dhisOrgUnits[orgUnit.attributeValues[MFR_LOCATION_ATTRIBUTE_UID]] = orgUnit
+                })
+            }
+
             for (let approval of appropriateApprovals) {
                 //Look for the parent 
-                const parentMFRID = approval.reportingHierarchyId.split('/')[1]
-                try {
-                    let response = await checkOrgUnitUsingMFRIDRefetch({ mfrId: parentMFRID })
-                    if (response.organisationUnits.organisationUnits.length === 0) {
-                        approval.parentExists = false;
-                        continue;
-                    }
-                    approval.parentDHISId = response.organisationUnits.organisationUnits[0].id
-                    approval.parentExists = true;
+                const parentOrgUnit = dhisOrgUnits[approval.reportingHierarchyId.split('/')[1]]
+
+                if (!parentOrgUnit) {
+                    approval.error = true;
+                    approval.errorMessage = "Org unit's parent is not imported in DHIS2. Parent is: " + approval.reportingHierarchyName.split('/')[1]
+                    continue
                 }
-                catch (err) {
-                    console.error("Error: ", err)
+
+                //Check if the orgUnit with theDHISid exists and if it is different to that of MFR. 
+                if (approval.dhisId && approval.dhisId !== "" && dhisOrgUnits[approval.mfrId] && dhisOrgUnits[approval.mfrId].id !== approval.dhisId) {
+                    approval.error = true;
+                    approval.errorMessage = `DHIS2 and MFR id imported in DHIS2 doesn't match pending approval. DHIS2_id_from_mfr=${approval.dhisId} while dhis2 id is ${parentOrgUnit.id}`
+                    continue
                 }
+                approval.error = false;
+
+                approval.parentDHISId = parentOrgUnit.id
+                approval.parentExists = true;
+
             }
             setPendingApprovals(appropriateApprovals)
             setFinishedLoading(true)
+            setAnyLoading(false)
         }
         if (userOrgUnits && allApprovals && !finishedLoading) {
             doSequential();
@@ -364,11 +440,40 @@ const ApproveImports = () => {
             return allChange
         } catch (err) {
             console.error(err)
+        } finally {
+
         }
         return null;
     }
 
+    const handleReject = async (mfrObject: MFRMapped, rejected) => {
+        setAnyLoading(true);
+        let temp = rejectedList ? rejectedList.rejectedList : []
+
+        if (rejected) {
+            //We are now trying to unreject.
+            temp = temp.filter(item => item !== mfrObject.mfrId + "_" + mfrObject.lastUpdated?.toISOString())
+        }
+        else {
+            temp?.push(mfrObject.mfrId + "_" + mfrObject.lastUpdated?.toISOString())
+        }
+
+
+        //Make sure that there are no duplicates.
+        const dataToSend = Array.from(new Set(temp))
+        try {
+            await uploadRejectedList({ data: dataToSend })
+        } catch (e) {
+            console.error("Error uploading rejected list")
+        } finally {
+
+        }
+        await getRejectedList();
+        setAnyLoading(false)
+    }
+
     const handleApproval = async (mfrObject: MFRMapped) => {
+        setAnyLoading(true);
         let changes = await getChanges(mfrObject)
         if (!changes) {
             //TODO show error here.
@@ -441,7 +546,7 @@ const ApproveImports = () => {
 
         setSelectedApproval(mfrObject)
         setShowConfirmModal(true)
-
+        setAnyLoading(false);
         return;
     };
 
@@ -452,6 +557,10 @@ const ApproveImports = () => {
     return (
         <div className='container'>
             <h1>Pending Imports</h1>
+            {anyLoading &&
+                <FullScreenLoader />
+            }
+            <Switch checked={showRejectedList} onChange={() => setShowRejectedList(!showRejectedList)} label="Show rejected" />
             <input className='searchbar'
                 type="text"
                 placeholder="Search..."
@@ -469,10 +578,10 @@ const ApproveImports = () => {
                                 Parent
                             </DataTableColumnHeader>
                             <DataTableColumnHeader>
-                                Change
+                                Facility type
                             </DataTableColumnHeader>
                             <DataTableColumnHeader>
-                                Change To
+                                Last updated
                             </DataTableColumnHeader>
                             <DataTableColumnHeader>
                                 Approval Status
@@ -482,26 +591,46 @@ const ApproveImports = () => {
                         </DataTableRow>
                     </TableHead>
                     <TableBody>
-                        {pendingApprovals?.map((pendingApproval, index) => (
-                            <DataTableRow key={pendingApproval.mfrId}>
-                                <DataTableCell>{pendingApproval.name}</DataTableCell>
-                                <DataTableCell>{pendingApproval.lastUpdated?.toISOString()}</DataTableCell>
-                                <DataTableCell>{pendingApproval.FT}</DataTableCell>
-                                <DataTableCell>{pendingApproval.changeType}</DataTableCell>
-                                <DataTableCell>{"Not Approved"}</DataTableCell>
-                                <DataTableCell>
-                                    <Button secondary onClick={() => handleApproval(pendingApproval)}>
-                                        Reject
-                                    </Button>
-                                </DataTableCell>
-                                <DataTableCell>
-                                    <Button title={!pendingApproval.parentExists ? "Parent doesn't exist" : "Approve"}
-                                        disabled={!pendingApproval.parentExists} primary onClick={() => handleApproval(pendingApproval)}>
-                                        Approve
-                                    </Button>
-                                </DataTableCell>
-                            </DataTableRow>
-                        ))}
+                        {pendingApprovals?.filter(item => {
+                            return item.name?.toLowerCase().includes(filterValue) || item.FT?.toLowerCase().includes(filterValue)
+                        })?.map((pendingApproval, index) => {
+                            let rejected = remappedRejectedList[pendingApproval.mfrId + "_" + pendingApproval.lastUpdated?.toISOString()]
+                            return (
+                                <>
+                                    {((!rejected) || (rejected && showRejectedList)) &&
+                                        <DataTableRow key={pendingApproval.mfrId}>
+                                            <DataTableCell>{pendingApproval.name}</DataTableCell>
+                                            <DataTableCell>{pendingApproval.reportingHierarchyName.split('/')[1]}</DataTableCell>
+                                            <DataTableCell>{pendingApproval.FT}</DataTableCell>
+                                            <DataTableCell>{pendingApproval.lastUpdated?.toISOString()}</DataTableCell>
+                                            <DataTableCell>{rejected ? "Rejected" : "Pending"}</DataTableCell>
+                                            <DataTableCell>
+                                                <Button secondary onClick={async () => handleReject(pendingApproval, rejected)}>
+                                                    {rejected ? "Un" : ""}Reject
+                                                </Button>
+                                            </DataTableCell>
+                                            <DataTableCell>
+                                                {!rejected &&
+                                                    <Button title={pendingApproval.error ? pendingApproval.errorMessage : "Approve"}
+                                                        disabled={pendingApproval.error} primary onClick={
+                                                            () => {
+                                                                try {
+                                                                    handleApproval(pendingApproval)
+                                                                } catch (e) {
+                                                                    console.log("something went wrong in handle approval", e)
+                                                                }
+                                                                setAnyLoading(false)
+                                                            }
+                                                        }>
+                                                        Approve
+                                                    </Button>
+                                                }
+                                            </DataTableCell>
+                                        </DataTableRow>
+                                    }
+                                </>
+                            )
+                        })}
                     </TableBody>
                 </DataTable>
             }

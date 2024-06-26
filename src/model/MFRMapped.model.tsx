@@ -28,6 +28,7 @@ export interface MFRMapped {
      * The path of the facility using MFR ids.
      *  */
     reportingHierarchyId: string,
+    reportingHierarchyName: string,
     /**
      * Closed date in MFR.
      */
@@ -43,7 +44,7 @@ export interface MFRMapped {
     oldIdentificationNumber: string,
     ethiopianNationalFacilityId: string,
     hmisCode: string,
-    echisId: string,
+    mfrCode: string,
     dhisId: string,
     facilityId,
     operationalStatus: string,
@@ -56,4 +57,8 @@ export interface MFRMapped {
     parentExists: boolean,
     parentDHISId: string | null,
     changeType: string,
+    isPHCU: boolean,
+    isParentPHCU: boolean,
+    error: boolean,
+    errorMessage: string,
 }

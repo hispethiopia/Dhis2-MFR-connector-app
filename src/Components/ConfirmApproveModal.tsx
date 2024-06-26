@@ -6,6 +6,7 @@ import { MFRMapped } from '../model/MFRMapped.model';
 import { generateId, generatePassword } from '../functions/helpers';
 import { UserConfig } from '../model/Configuration.model';
 import { CHANGE_TYPE_CREATE, CHANGE_TYPE_DISABLE, MFR_LOCATION_ATTRIBUTE_UID, MFR_OPTION_SETS_ATTRIBUTE_CODE, mfrMapping } from '../functions/constants';
+import { FullScreenLoader } from './FullScreenLoader';
 
 interface ModalProps {
     allChanges: AllChange | undefined;
@@ -46,13 +47,12 @@ const maintainAssignment = (props: MetadataAssignmentProps) => {
 
 
 const createOrgUnit = (mfrObject: MFRMapped | null) => {
-    console.log("Melaeke ", mfrObject?.yearOpened)
     let dhisObject = {
         id: "",
         attributeValues: [
             { "value": mfrObject?.mfrId, attribute: { "id": MFR_LOCATION_ATTRIBUTE_UID } }
         ],
-        code: mfrObject?.hmisCode,
+        code: mfrObject?.mfrCode,
         geometry: {
             type: "",
             coordinates: ["", ""]
@@ -88,7 +88,7 @@ const createOrgUnit = (mfrObject: MFRMapped | null) => {
 const createUser = (config: UserConfig, mfrObject: MFRMapped | null, orgUnitId: string | undefined, parentId: string) => {
     return {
         id: generateId(11),
-        username: mfrObject?.hmisCode + config.suffix,
+        username: mfrObject?.mfrCode + config.suffix,
         disabled: false,
         organisationUnits: [{ "id": orgUnitId }],
         dataViewOrganisationUnits: [{ "id": parentId }],
@@ -120,12 +120,15 @@ export const ConfirmApproveModal: React.FC<ModalProps> = ({
     const [expanded, setExpanded] = useState("");
     const [orgUnitMutation] = useDataMutation(createOrganizationMutation);
     const [metadataMutation] = useDataMutation(updateMetadata);
+    const [anyLoading, setAnyLoading] = useState(false)
 
 
     const handleApprove = async () => {
-        //I am here trying now to handle the approve and show the actual changes to the user.
-        let orgUnitId = allChanges?.dhisOrgUnitObject ? allChanges?.dhisOrgUnitObject.id : generateId(11);
-        let orgUnitCode = "";
+        setAnyLoading(true);
+        //for orgUnit id, use the dhis2 object, if it is an update or use the mfr DHIS2 id if it exists otherwise create a new ID.
+        let orgUnitId = allChanges?.dhisOrgUnitObject ? allChanges?.dhisOrgUnitObject.id :
+            selectedApproval?.dhisId ? selectedApproval?.dhisId : generateId(11);
+        let orgUnitCode = selectedApproval?.mfrCode;
         //if type is create, first create the orgUnit.
 
         //if type is update, I can send all the request in one post request.
@@ -231,7 +234,7 @@ export const ConfirmApproveModal: React.FC<ModalProps> = ({
             }
             if (allChanges?.changeType === CHANGE_TYPE_CREATE) {
                 //If orgUnit is create, send a post request to create the orgUnit first.
-                await orgUnitMutation(orgUnitObject)
+                await orgUnitMutation({ data: orgUnitObject })
             } else if (allChanges?.changeType === CHANGE_TYPE_DISABLE) {
                 orgUnitObject.name = orgUnitObject.name + "_closed"
                 orgUnitObject.closedDate = new Date().toISOString()
@@ -244,12 +247,18 @@ export const ConfirmApproveModal: React.FC<ModalProps> = ({
 
         } catch (e) {
             console.error(e)
+        }finally{
+            
         }
+        setAnyLoading(false);
 
     }
 
     return (
         <Modal large>
+            {anyLoading &&
+                <FullScreenLoader />
+            }
             <ModalTitle>
                 {allChanges?.changeType}
             </ModalTitle>
@@ -311,7 +320,7 @@ export const ConfirmApproveModal: React.FC<ModalProps> = ({
                         <DataTableRow
                             expandableContent={
                                 <div >
-                                    Data sets to assign: {allChanges?.newAssignments.cocToAssign.map(co => fetchedObjects?.dataSets[co].displayName).map(name => <>{name}<br /></>)}
+                                    Data sets to assign: {allChanges?.newAssignments.cocToAssign.map(co => fetchedObjects?.categoryOptions[co].displayName).map(name => <>{name}<br /></>)}
                                 </div>
                             }
                             onExpandToggle={() => expanded !== "categoryOptionsAssign" ? setExpanded('categoryOptionsAssign') : setExpanded("")}

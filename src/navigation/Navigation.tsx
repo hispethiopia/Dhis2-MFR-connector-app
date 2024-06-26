@@ -33,5 +33,9 @@ export const Navigation = () => (
             label="Approval"
             path="/approveImports"
         />
+        <NavigationItem
+            label="Settings"
+            path="/settings"
+        />
     </Menu>
 )
