@@ -21,51 +21,51 @@ export const USER_CHANGE_TYPES = {
 
 
 export const mfrMapping = {
-    mfrId: "resource.id",
+    mfrId: "resource_id",
     /**
-     * Date time of MFR, found in meta.lastUpdated
+     * Date time of MFR, found in meta_lastUpdated
      */
-    lastUdated: "resource.meta.lastUpdated",
+    lastUdated: "resource_meta_lastUpdated",
     /**
-     * facility version id, which is incrementing on update. found in meta.versionId.
+     * facility version id, which is incrementing on update_ found in meta_versionId_
      */
-    versionId: "resource.meta.versionId",
+    versionId: "resource_meta_versionId",
     /**
-     * the status of the facility wether it is approved or not.
+     * the status of the facility wether it is approved or not_
      */
-    status: "resource.extension.status",
+    status: "resource_extension_status",
     /**
      * Date facility was created in MFR
      */
-    createdDate: "resource.extension.createdDate",
+    createdDate: "resource_extension_createdDate",
     /**
-     * The path of the facility using MFR ids.
+     * The path of the facility using MFR ids_
      *  */
-    reportingHierarchyId: "resource.extension.reportingHierarchyId",
+    reportingHierarchyId: "resource_extension_reportingHierarchyId",
     /**
-     * Closed date in MFR.
+     * Closed date in MFR_
      */
-    closedDate: "resource.extension.FacilityInformation.closedDate",
-    suspensionStartDate: "resource.extension.FacilityInformation.suspensionStartDate",
-    suspensionEndDate: "resource.extension.FacilityInformation.suspensionEndDate",
+    closedDate: "resource_extension_FacilityInformation_closedDate",
+    suspensionStartDate: "resource_extension_FacilityInformation_suspensionStartDate",
+    suspensionEndDate: "resource_extension_FacilityInformation_suspensionEndDate",
     /**
-     * Type of settlement in MFR.
+     * Type of settlement in MFR_
      */
-    settlement: "resource.extension.FacilityInformation.settlement",
-    yearOpened: "resource.extension.FacilityInformation.yearOpened",
-    ownership: "resource.extension.FacilityInformation.ownership",
-    oldIdentificationNumber: "resource.extension.FacilityInformation.oldIdentificationNumber",
-    ethiopianNationalFacilityId: "resource.extension.FacilityInformation.ethiopianNationalFacilityId",
-    hmisCode: "resource.extension.FacilityInformation.hmisCode",
-    echisId: "resource.extension.FacilityInformation.echisId",
-    dhisId: "resource.extension.FacilityInformation.dihsId",
-    facilityId: "resource.extension.FacilityInformation.facilityId",
-    operationalStatus: "resource.operationalStatus.display",
-    name: "resource.name",
-    FT: "resource.type.FT",
-    longitude: "resource.position.longitude",
-    latitude: "resource.position.latitude",
-    altitude: "resource.position.altitude",
-    managingOrganization: "resource.managingOrganization.reference",
+    settlement: "resource_extension_FacilityInformation_settlement",
+    yearOpened: "resource_extension_FacilityInformation_yearOpened",
+    ownership: "resource_extension_FacilityInformation_ownership",
+    oldIdentificationNumber: "resource_extension_FacilityInformation_oldIdentificationNumber",
+    ethiopianNationalFacilityId: "resource_extension_FacilityInformation_ethiopianNationalFacilityId",
+    hmisCode: "resource_extension_FacilityInformation_hmisCode",
+    echisId: "resource_extension_FacilityInformation_echisId",
+    dhisId: "resource_extension_FacilityInformation_dihsId",
+    facilityId: "resource_extension_FacilityInformation_facilityId",
+    operationalStatus: "resource_operationalStatus_display",
+    name: "resource_name",
+    FT: "resource_type_FT",
+    longitude: "resource_position_longitude",
+    latitude: "resource_position_latitude",
+    altitude: "resource_position_altitude",
+    managingOrganization: "resource_managingOrganization_reference",
     isPHCU: ""
 }

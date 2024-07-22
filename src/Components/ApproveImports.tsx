@@ -1,10 +1,10 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { useDataMutation, useAlert, useDataQuery } from '@dhis2/app-runtime';
-import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, Switch, TableBody, TableHead } from '@dhis2/ui';
-import { getApplicableConfigurations, remapAttributeValues, remapMFR, remapUsingId } from '../functions/services';
+import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, Pagination, Switch, TableBody, TableFoot, TableHead } from '@dhis2/ui';
+import { debounce, getApplicableConfigurations, remapAttributeValues, remapMFR, remapUsingId } from '../functions/services';
 import { MFRMapped } from '../model/MFRMapped.model';
 import { MetadataContext } from '../App';
-import { CHANGE_TYPE_CREATE, CHANGE_TYPE_UPDATE, MFR_LOCATION_CODE, MFR_LOCATION_ATTRIBUTE_UID } from '../functions/constants';
+import { CHANGE_TYPE_CREATE, CHANGE_TYPE_UPDATE, MFR_LOCATION_CODE, MFR_LOCATION_ATTRIBUTE_UID, mfrMapping } from '../functions/constants';
 import { CategoryOption, DataSet, OrganisationUnitGroup } from '../model/Metadata.model';
 import { AffectedValues, AllChange, ChangeType, FetchedObjects, User, UserChange } from '../model/Approvals.model';
 import { UserConfig } from '../model/Configuration.model';
@@ -15,9 +15,21 @@ import { useLoggingContext } from './Logging';
 const pendingApprovalsQuery = {
     approvalStatus: {
         resource: 'dataStore/Dhis2-MFRApproval',
-        params: {
-            fields: '.',
-            paging: false,
+        params: ({ page, pageSize, searchTerm }) => {
+            if (searchTerm !== '') {
+                return {
+                    fields: '.',
+                    page,
+                    pageSize,
+                    filter: `${mfrMapping.name}:ilike:${searchTerm}`
+                }
+            } else {
+                return {
+                    fields: '.',
+                    page,
+                    pageSize
+                }
+            }
         },
     },
 };
@@ -191,6 +203,8 @@ const ApproveImports = () => {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [parentOrgUnitId, setParentOrgUnitId] = useState("");
     const [showRejectedList, setShowRejectedList] = useState(false);
+    const [pageNumber, setPageNumber] = useState(1)
+    const [pageSize, setPageSize] = useState(50)
 
 
     //fetch the mfr ids of the userOrgUnits to fetch from approval.
@@ -202,18 +216,31 @@ const ApproveImports = () => {
     const [showLogs, setShowLogs] = useState(false);
     const [refreshLogs, setRefreshLogs] = useState(false);
     const [filterValue, setFilterValue] = useState('');
+    const [searchTerm, setSearchTerm] = useState('')
 
 
     const successAlert = useAlert('Approval status updated successfully!', { duration: 3000 });
     const errorAlert = useAlert('Failed to update approval status', { critical: true });
 
+    const { loading: loadingPendingApprovals, error: errorPendingApprovals, data: allApprovals, refetch: refetchPendingApprovals } = useDataQuery(pendingApprovalsQuery, {
+        variables: { page: pageNumber, pageSize: pageSize, searchTerm }
+    })
+
+
+    useEffect(() => {
+        setFinishedLoading(false)
+        refetchPendingApprovals({ page: pageNumber, pageSize: pageSize, searchTerm })
+    }, [pageNumber, pageSize, searchTerm])
+
+    const changePage = (page) => {
+        setPageNumber(page)
+    }
 
 
     /**
      * TODO: instead of getting all pending approvals and then filtering only those that apply to the user,
      * filter the appprovals from the server that only apply to the user.
      */
-    const { loading: loadingPendingApprovals, error: errorPendingApprovals, data: allApprovals, refetch: refetchPendingApprovals } = useDataQuery(pendingApprovalsQuery)
 
     useEffect(() => {
         const doSequential = async () => {
@@ -229,7 +256,7 @@ const ApproveImports = () => {
                 })
             })
 
-            let mappedApprovals = remapMFR(allApprovals.approvalStatus)
+            let mappedApprovals = remapMFR(allApprovals.approvalStatus.entries)
             let finalList: MFRMapped[] = []
             //Now handle PHCUs by creating duplicates for PHCUs, and looking for the parent of the health center.
             mappedApprovals.forEach(approval => {
@@ -561,10 +588,18 @@ const ApproveImports = () => {
         return;
     };
 
+    const handleSearch = useCallback(debounce((value) => {
+        console.log("Setting search term")
+        setSearchTerm(value);
+        setPageNumber(1);
+    }, 500), [])
+
     const handleFilterChange = event => {
         setFilterValue(event.target.value);
+        handleSearch(event.target.value)
     };
 
+    console.log(allApprovals)
     return (
         <div className='container'>
             <h1>Pending Imports</h1>
@@ -579,72 +614,88 @@ const ApproveImports = () => {
                 onChange={handleFilterChange}
             />{
                 finishedLoading &&
-                <DataTable>
-                    <TableHead>
-                        <DataTableRow>
-                            <DataTableColumnHeader>
-                                Name
-                            </DataTableColumnHeader>
-                            <DataTableColumnHeader>
-                                Parent
-                            </DataTableColumnHeader>
-                            <DataTableColumnHeader>
-                                Facility type
-                            </DataTableColumnHeader>
-                            <DataTableColumnHeader>
-                                Last updated
-                            </DataTableColumnHeader>
-                            <DataTableColumnHeader>
-                                Approval Status
-                            </DataTableColumnHeader>
-                            <DataTableColumnHeader>Reject</DataTableColumnHeader>
-                            <DataTableColumnHeader>Approve</DataTableColumnHeader>
-                        </DataTableRow>
-                    </TableHead>
-                    <TableBody>
-                        {pendingApprovals?.filter(item => {
-                            return item.name?.toLowerCase().includes(filterValue) || item.FT?.toLowerCase().includes(filterValue)
-                        })?.map((pendingApproval, index) => {
-                            let rejected = remappedRejectedList[pendingApproval.mfrId + "_" + pendingApproval.lastUpdated?.toISOString()]
-                            return (
-                                <>
-                                    {((!rejected) || (rejected && showRejectedList)) &&
-                                        <DataTableRow key={pendingApproval.mfrId}>
-                                            <DataTableCell>{pendingApproval.name}</DataTableCell>
-                                            <DataTableCell>{pendingApproval.reportingHierarchyName.split('/')[1]}</DataTableCell>
-                                            <DataTableCell>{pendingApproval.FT}</DataTableCell>
-                                            <DataTableCell>{pendingApproval.lastUpdated?.toISOString()}</DataTableCell>
-                                            <DataTableCell>{rejected ? "Rejected" : "Pending"}</DataTableCell>
-                                            <DataTableCell>
-                                                <Button secondary onClick={async () => handleReject(pendingApproval, rejected)}>
-                                                    {rejected ? "Un" : ""}Reject
-                                                </Button>
-                                            </DataTableCell>
-                                            <DataTableCell>
-                                                {!rejected &&
-                                                    <Button title={pendingApproval.error ? pendingApproval.errorMessage : "Approve"}
-                                                        disabled={pendingApproval.error} primary onClick={
-                                                            async () => {
-                                                                setAnyLoading(true)
-                                                                try {
-                                                                    await handleApproval(pendingApproval)
-                                                                } catch (e) {
-                                                                    console.log("something went wrong in handle approval", e)
-                                                                }
-                                                                setAnyLoading(false)
-                                                            }
-                                                        }>
-                                                        Approve
+                <>
+                    <DataTable>
+                        <TableHead>
+                            <DataTableRow>
+                                <DataTableColumnHeader>
+                                    Name
+                                </DataTableColumnHeader>
+                                <DataTableColumnHeader>
+                                    Parent
+                                </DataTableColumnHeader>
+                                <DataTableColumnHeader>
+                                    Facility type
+                                </DataTableColumnHeader>
+                                <DataTableColumnHeader>
+                                    Last updated
+                                </DataTableColumnHeader>
+                                <DataTableColumnHeader>
+                                    Approval Status
+                                </DataTableColumnHeader>
+                                <DataTableColumnHeader>Reject</DataTableColumnHeader>
+                                <DataTableColumnHeader>Approve</DataTableColumnHeader>
+                            </DataTableRow>
+                        </TableHead>
+                        <TableBody>
+                            {pendingApprovals?.map((pendingApproval, index) => {
+                                let rejected = remappedRejectedList[pendingApproval.mfrId + "_" + pendingApproval.lastUpdated?.toISOString()]
+                                return (
+                                    <>
+                                        {((!rejected) || (rejected && showRejectedList)) &&
+                                            <DataTableRow key={pendingApproval.mfrId}>
+                                                <DataTableCell>{pendingApproval.name}</DataTableCell>
+                                                <DataTableCell>{pendingApproval.reportingHierarchyName.split('/')[1]}</DataTableCell>
+                                                <DataTableCell>{pendingApproval.FT}</DataTableCell>
+                                                <DataTableCell>{pendingApproval.lastUpdated?.toISOString()}</DataTableCell>
+                                                <DataTableCell>{rejected ? "Rejected" : "Pending"}</DataTableCell>
+                                                <DataTableCell>
+                                                    <Button secondary onClick={async () => handleReject(pendingApproval, rejected)}>
+                                                        {rejected ? "Un" : ""}Reject
                                                     </Button>
-                                                }
-                                            </DataTableCell>
-                                        </DataTableRow>
-                                    }
-                                </>
-                            )
-                        })}
-                    </TableBody>
-                </DataTable>
+                                                </DataTableCell>
+                                                <DataTableCell>
+                                                    {!rejected &&
+                                                        <Button title={pendingApproval.error ? pendingApproval.errorMessage : "Approve"}
+                                                            disabled={pendingApproval.error} primary onClick={
+                                                                async () => {
+                                                                    setAnyLoading(true)
+                                                                    try {
+                                                                        await handleApproval(pendingApproval)
+                                                                    } catch (e) {
+                                                                        console.log("something went wrong in handle approval", e)
+                                                                    }
+                                                                    setAnyLoading(false)
+                                                                }
+                                                            }>
+                                                            Approve
+                                                        </Button>
+                                                    }
+                                                </DataTableCell>
+                                            </DataTableRow>
+                                        }
+                                    </>
+                                )
+                            })}
+                        </TableBody>
+                        <TableFoot>
+                            <DataTableRow>
+                                <DataTableCell>
+
+                                    <Pagination
+                                        onPageChange={changePage}
+                                        page={pageNumber}
+                                        pageSize={pageSize}
+                                        pageCount={allApprovals?.approvalStatus.pager.total}
+                                        hidePageSelect
+                                        hidePageSizeSelect
+                                        hidePageSummary
+                                    />
+                                </DataTableCell>
+                            </DataTableRow>
+                        </TableFoot>
+                    </DataTable>
+                </>
             }
             {
                 showConfirmModal &&
