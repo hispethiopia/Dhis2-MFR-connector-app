@@ -1,8 +1,5 @@
-import { AffectedValues, User, UserChange, UserProperties } from "../model/Approvals.model";
-import { Configuration, UserConfig } from "../model/Configuration.model";
+import { Configuration } from "../model/Configuration.model";
 import { MFRMapped } from "../model/MFRMapped.model";
-import { UserRole } from "../model/Metadata.model";
-import { generateId } from "./helpers";
 
 
 const mfrMapping = {
@@ -136,82 +133,8 @@ export const getApplicableConfigurations = (
     return applicableConfigurations
 }
 
-
-
-/*
-export const getUserChange = (userConfig: UserConfig, userObject: User) => {
-    let userChanges: UserChange = {
-        assign: {
-            userGroups: [],
-            userRoles: [],
-        },
-        unassign: {
-            userGroups: [],
-            userRoles: [],
-        },
-        unchanged: {
-            userGroups: [],
-            userRoles: [],
-        },
-        user: userObject
-    };
-
-    userObject.userRoles.forEach((assignedRole: UserRole) => {
-        if (userConfig.userRoles.includes(assignedRole.id)) {
-            //This means that the assigned role is ok.
-            userChanges.unchanged.userRoles.push(assignedRole)
-        } else {
-            userChanges.unassign.userRoles.push(assignedRole)
-        }
-    })
-
-    userObject.userGroups.forEach(assignedGroup => {
-        if (userConfig.userGroups.includes(assignedGroup.id)) {
-            //This means that the assigned group is ok.
-            userChanges.unchanged.userGroups.push(assignedGroup)
-        } else {
-            userChanges.unassign.userGroups.push(assignedGroup)
-        }
-    })
-
-    userChanges.assign.userRoles.push(...userConfig.userRoles.filter(role => {
-        return !userChanges.unchanged.userRoles.map(ur => ur.id).includes(role)
-    }))
-
-    userChanges.assign.userGroups.push(...userConfig.userGroups.filter(group => {
-        return !userChanges.unchanged.userGroups.map(ug => ug.id).includes(group)
-    }))
-
-    return userChanges;
-}*/
-
 export const remapUsingId = (objects) => {
     objects.forEach(obj => {
         objects[obj.id] = obj
     });
 }
-
-/*
-export const prepareOrganizationsObject = (
-    allConfigurations: Configuration[],
-    approvedObject: MFRMapped,
-    parentId: string,
-) => {
-    /*
-    let { orgUnitGroups, dataSets, categoryOptionCombos, userConfigs } = getAffectedMetadata(allConfigurations, approvedObject)
-
-    return {
-        code: approvedObject.hmisCode,
-        name: approvedObject.name,
-        shortName: approvedObject.name,
-        parent: {
-            "id": parentId
-        },
-        openingDate: approvedObject.yearOpened,
-        dataSets: dataSets.map(dataSet => ({ id: dataSet })),
-        geometry: { "type": "Point", "coordinates": [approvedObject.latitude, approvedObject.longitude] },
-        id: generateId(11),
-        organisationUnitGroups: orgUnitGroups.map(oug => ({ id: oug }))
-    }
-
-}*/

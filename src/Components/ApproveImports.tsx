@@ -4,7 +4,7 @@ import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, 
 import { debounce, getApplicableConfigurations, remapAttributeValues, remapMFR, remapUsingId } from '../functions/services';
 import { MFRMapped } from '../model/MFRMapped.model';
 import { MetadataContext } from '../App';
-import { CHANGE_TYPE_CREATE, CHANGE_TYPE_UPDATE, MFR_LOCATION_CODE, MFR_LOCATION_ATTRIBUTE_UID, mfrMapping } from '../functions/constants';
+import { CHANGE_TYPE_CREATE, CHANGE_TYPE_UPDATE, MFR_LOCATION_CODE, MFR_LOCATION_ATTRIBUTE_UID, mfrMapping, CHANGE_TYPE_NEW_MAPPING } from '../functions/constants';
 import { CategoryOption, DataSet, OrganisationUnitGroup } from '../model/Metadata.model';
 import { AffectedValues, AllChange, ChangeType, FetchedObjects, User, UserChange } from '../model/Approvals.model';
 import { UserConfig } from '../model/Configuration.model';
@@ -152,6 +152,16 @@ const detailedOrgUnitQuery = {
     }
 }
 
+const orgUnitFetchUsingIdQuery = {
+    organisationUnits: {
+        resource: "organisationUnits",
+        params: ({ dhisId }) => ({
+            filter: "id:eq:" + dhisId,
+            fields: "*,users[id,organisationUnits,username,userGroups[id,displayName],userRoles[id,displayName]],dataSets[id,displayName],organisationUnitGroups[id,displayName]"
+        })
+    }
+}
+
 const categoryOptionsFromOrgUnitQuery = {
     categoryOptions: {
         resource: "categoryOptions",
@@ -175,6 +185,7 @@ const ApproveImports = () => {
     let userOrgUnitIds = metadata.me.organisationUnits.map(orgUnit => { return orgUnit.id })
     const { refetch: checkOrgUnitUsingMFRIDRefetch } = useDataQuery(checkOrgUnitUsingMFRIDQuery, { lazy: true })
     const { refetch: organisationUnitDetailedRefetch } = useDataQuery(detailedOrgUnitQuery, { lazy: true })
+    const { refetch: orgUnitDhisIdRefetch } = useDataQuery(orgUnitFetchUsingIdQuery, { lazy: true })
     const { refetch: getCategoryOptionsFromOrgUnitRefetch } = useDataQuery(categoryOptionsFromOrgUnitQuery, { lazy: true })
 
     const { refetch: organisationUnitGroupsRefetch } = useDataQuery(organisationUnitGroupsQuery, { lazy: true })
@@ -204,7 +215,7 @@ const ApproveImports = () => {
     const [parentOrgUnitId, setParentOrgUnitId] = useState("");
     const [showRejectedList, setShowRejectedList] = useState(false);
     const [pageNumber, setPageNumber] = useState(1)
-    const [pageSize, setPageSize] = useState(50)
+    const [pageSize, setPageSize] = useState(10)
 
 
     //fetch the mfr ids of the userOrgUnits to fetch from approval.
@@ -221,6 +232,11 @@ const ApproveImports = () => {
 
     const successAlert = useAlert('Approval status updated successfully!', { duration: 3000 });
     const errorAlert = useAlert('Failed to update approval status', { critical: true });
+
+    const changeToPHCUName = (name) =>{
+        return ((name).replace(/\s+/g, ' ').replace(/health center/gi, '')).trim() + "_PHCU"
+
+    }
 
     const { loading: loadingPendingApprovals, error: errorPendingApprovals, data: allApprovals, refetch: refetchPendingApprovals } = useDataQuery(pendingApprovalsQuery, {
         variables: { page: pageNumber, pageSize: pageSize, searchTerm }
@@ -268,7 +284,7 @@ const ApproveImports = () => {
                     phcuApproval.mfrCode = approval.mfrCode + "_PHCU"
                     phcuApproval.dhisId = ""
                     //First replace multiple spaces in the name. Not replacing HC with PHCU because just incase hc is not found, PHCU will still be there
-                    phcuApproval.name = (phcuApproval.name).replace(/\s+/g, ' ').replace(/health center/gi, '') + "_PHCU"
+                    phcuApproval.name = changeToPHCUName(phcuApproval.name)
 
                     //PHCU approval already has the _PHCU
                     phcuApproval.reportingHierarchyId = phcuApproval.mfrId + "/" +
@@ -282,6 +298,16 @@ const ApproveImports = () => {
                     approval.isPHCU = false;
                     //Push both PHCU approval and approval.
                     finalList.push(phcuApproval)
+                } else if (approval.isParentPHCU){
+                      //if the parent is a phcu, we need to check if the Parent PHCU is imported not the phcu .
+                      let hierarchyId = approval.reportingHierarchyId.split('/')
+                      hierarchyId[1] = hierarchyId[1] + "_PHCU"
+                      approval.reportingHierarchyId = hierarchyId.join('/')
+  
+                      let hierarchyName = approval.reportingHierarchyName.split('/')
+                      hierarchyName[1] = changeToPHCUName(hierarchyName[1])
+                      approval.reportingHierarchyName = hierarchyName.join('/')
+  
                 }
                 finalList.push(approval)
             })
@@ -352,7 +378,14 @@ const ApproveImports = () => {
     const getChanges = async (mfrObject: MFRMapped): Promise<AllChange | null> => {
         try {
             const orgUnitResponse = await organisationUnitDetailedRefetch({ mfrId: mfrObject.mfrId })
+            console.log("Melaeke here");
             let existingOrgUnit = orgUnitResponse.organisationUnits.organisationUnits.length > 0 ? orgUnitResponse.organisationUnits.organisationUnits[0] : null
+            let newMapping = false;
+            if (existingOrgUnit === null && mfrObject.dhisId) {
+                const orgUnitRes = await orgUnitDhisIdRefetch({ dhisId: mfrObject.dhisId })
+                existingOrgUnit = orgUnitRes.organisationUnits.organisationUnits.length > 0 ? orgUnitRes.organisationUnits.organisationUnits[0] : null
+                newMapping = true;
+            }
             let applicableConfigurations = getApplicableConfigurations(metadata.configurations, mfrObject)
 
 
@@ -442,7 +475,7 @@ const ApproveImports = () => {
             /**
              * find the change type  
              */
-            let changeType: ChangeType = existingOrgUnit ? CHANGE_TYPE_UPDATE : CHANGE_TYPE_CREATE;
+            let changeType: ChangeType = newMapping ? CHANGE_TYPE_NEW_MAPPING : existingOrgUnit ? CHANGE_TYPE_UPDATE : CHANGE_TYPE_CREATE;
 
             let allChange: AllChange = {
                 newAssignments: {
@@ -599,7 +632,6 @@ const ApproveImports = () => {
         handleSearch(event.target.value)
     };
 
-    console.log(allApprovals)
     return (
         <div className='container'>
             <h1>Pending Imports</h1>
@@ -659,6 +691,7 @@ const ApproveImports = () => {
                                                         <Button title={pendingApproval.error ? pendingApproval.errorMessage : "Approve"}
                                                             disabled={pendingApproval.error} primary onClick={
                                                                 async () => {
+                                                                    console.log("Here")
                                                                     setAnyLoading(true)
                                                                     try {
                                                                         await handleApproval(pendingApproval)
@@ -704,14 +737,12 @@ const ApproveImports = () => {
                     fetchedObjects={fetchedObjects}
                     parentOrgUnitId={parentOrgUnitId}
                     selectedApproval={selectedApproval ? selectedApproval : null}
-                    onAccept={async () => {
+                    onAccept={async (id) => {
                         //do the actual deletion here.
-                        /*
-                                                await mutate({ id: itemToDelete?.key })
-                                                setShowModal(false)
-                                                setItemToDelete(null)
-                                                refetch();
-                                                successAlert.show();*/
+                        setShowConfirmModal(false)
+                        setAllChanges(undefined)
+                        setFetchedObjects(undefined)
+                        setPendingApprovals(pendingApprovals?.filter(approval => approval.mfrId !== id))
                     }}
                     onReject={() => {
                         setShowConfirmModal(false)

@@ -1,4 +1,4 @@
-import { CHANGE_TYPE_CREATE, CHANGE_TYPE_DELETE, CHANGE_TYPE_DISABLE, CHANGE_TYPE_UPDATE } from "../functions/constants";
+import { CHANGE_TYPE_CREATE, CHANGE_TYPE_DELETE, CHANGE_TYPE_DISABLE, CHANGE_TYPE_NEW_MAPPING, CHANGE_TYPE_UPDATE } from "../functions/constants";
 import { UserConfig } from "./Configuration.model";
 import { CategoryOption, DataSet, OrganisationUnitGroup, UserGroup, UserRole } from "./Metadata.model";
 
@@ -40,7 +40,7 @@ interface UserChange {
     userName: string,
 }
 
-type ChangeType = typeof CHANGE_TYPE_CREATE | typeof CHANGE_TYPE_DISABLE | typeof CHANGE_TYPE_UPDATE
+type ChangeType = typeof CHANGE_TYPE_CREATE | typeof CHANGE_TYPE_DISABLE | typeof CHANGE_TYPE_UPDATE | typeof CHANGE_TYPE_NEW_MAPPING
 
 interface AllChange {
     newAssignments: {

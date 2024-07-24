@@ -1,6 +1,6 @@
 import { useDataQuery } from "@dhis2/app-runtime"
 import { MFR_OPTION_SETS_ATTRIBUTE_CODE } from "../functions/constants"
-import { Metadata, getEmptyMetadata } from "../model/Metadata.model"
+import { getEmptyMetadata } from "../model/Metadata.model"
 
 const query = {
     me: {

@@ -1,8 +1,7 @@
 
-import React, { createContext, useEffect, useContext } from "react"
+import React, { createContext, useContext } from "react"
 import { useAlert, useDataMutation } from "@dhis2/app-runtime"
 import { Log } from "../model/Log.model";
-import { Button } from "@dhis2/ui";
 
 const postMutation = {
     type: 'update',
