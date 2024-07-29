@@ -6,7 +6,7 @@ const query = {
     me: {
         resource: 'me',
         params: {
-            fields: 'id,displayName,username,organisationUnits[id,displayName,attributeValues[value,attribute[code]]]',
+            fields: 'id,displayName,username,organisationUnits[id,displayName,attributeValues[value,attribute[code,id]]]',
             paging: false
         }
     },
@@ -74,6 +74,15 @@ export const fetchMetadataHook = () => {
         metadata.userGroups = data.userGroups?.userGroups || []
         metadata.categoryOptions = data.categoryOptions?.categoryOptions || []
         metadata.configurations = data.configurations;
+
+
+        //remap attributeOption to a new field
+        data.me.organisationUnits.forEach(orgUnit => {
+            orgUnit.attributeValues.forEach(attVal => {
+                orgUnit.attributeValues[attVal.attribute.code] = attVal.value
+                orgUnit.attributeValues[attVal.attribute.id] = attVal.value
+            })
+        })
         metadata.me = data.me
 
         data.optionSets?.optionSets.map(optionSet => {

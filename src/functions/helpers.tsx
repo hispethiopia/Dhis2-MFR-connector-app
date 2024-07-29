@@ -35,3 +35,8 @@ export const generatePassword = () => {
 
     return password;
 }
+
+export const changeToPHCUName = (name) =>{
+    return ((name).replace(/\s+/g, ' ').replace(/health center/gi, '')).trim() + "_PHCU"
+
+}

@@ -48,7 +48,8 @@ interface OptionSet {
 
 interface OrganisationUnitCondensed {
     id: string,
-    displayName: string
+    displayName: string,
+    attributeValues: {[code: string]: String}
 }
 
 

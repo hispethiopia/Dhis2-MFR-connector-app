@@ -1,5 +1,9 @@
-import { Configuration } from "../model/Configuration.model";
+import { AffectedValues, AllChange, ChangeType, User, UserChange } from "../model/Approvals.model";
+import { Configuration, UserConfig } from "../model/Configuration.model";
+import { CategoryOption, DataSet, OrganisationUnitGroup } from "../model/Metadata.model";
 import { MFRMapped } from "../model/MFRMapped.model";
+import stringSimilarity from 'string-similarity'
+import { CHANGE_TYPE_CREATE, CHANGE_TYPE_NEW_MAPPING, CHANGE_TYPE_UPDATE } from "./constants";
 
 
 const mfrMapping = {
@@ -98,6 +102,138 @@ export const remapMFR = (mfrObjects: any[]): MFRMapped[] => {
     })
 }
 
+export const getChanges = (mfrObject: MFRMapped,
+    existingOrgUnit: any,
+    allConfigurations: Configuration[],
+    assignedCategoryOptions: CategoryOption[],
+    changeType: ChangeType
+): AllChange => {
+    let newMapping = false;
+    if (existingOrgUnit === null && mfrObject.dhisId) {
+        newMapping = true;
+    }
+
+    const applicableConfigurations = getApplicableConfigurations(allConfigurations, mfrObject);
+
+    let dataSetsToBeAssigned: string[] = []
+    let ougsToBeAssigned: string[] = []
+    let catCombosToBeAssigned: string[] = []
+    let userConfigsToBeAssigned: UserConfig[] = []
+
+    applicableConfigurations.forEach(conf => {
+        catCombosToBeAssigned.push(...conf.categoryOptionCombos)
+        dataSetsToBeAssigned.push(...conf.dataSets)
+        ougsToBeAssigned.push(...conf.orgUnitGroups)
+        userConfigsToBeAssigned.push(...conf.userConfigs)
+    })
+
+    //This is the objects to unassign from existing orgUnit, if the orgUnit exists already.
+    let unasignedObjects: AffectedValues = {
+        dataSets: [],
+        categoryOptions: [],
+        users: [],
+        organisationUnitGroups: []
+    }
+    let unChangedObjects: AffectedValues = {
+        dataSets: [],
+        categoryOptions: [],
+        users: [],
+        organisationUnitGroups: []
+    }
+    let changedUsers: UserChange[] = [];
+
+    if (existingOrgUnit) {
+        existingOrgUnit.dataSets.forEach((ds: DataSet) => {
+            if (!dataSetsToBeAssigned.includes(ds.id)) {
+                unasignedObjects.dataSets.push(ds.id)
+            } else {
+                unChangedObjects.dataSets.push(ds.id)
+            }
+        })
+        existingOrgUnit.organisationUnitGroups.forEach((orgUnitGroup: OrganisationUnitGroup) => {
+            if (!ougsToBeAssigned.includes(orgUnitGroup.id)) {
+                unasignedObjects.organisationUnitGroups.push(orgUnitGroup.id)
+            } else {
+                unChangedObjects.organisationUnitGroups.push(orgUnitGroup.id)
+            }
+        })
+
+        assignedCategoryOptions.forEach(co => {
+            if (!catCombosToBeAssigned.includes(co.id)) {
+                unasignedObjects.categoryOptions.push(co.id)
+            } else {
+                unChangedObjects.categoryOptions.push(co.id)
+            }
+        })
+
+        existingOrgUnit.users.forEach((user: User) => {
+            //Find the configuration for this user.
+            let configurationFound = false;
+            userConfigsToBeAssigned.forEach(userConfig => {
+                if (user.username === existingOrgUnit.code + userConfig.suffix) {
+                    //If the suffix is found, then the user has been found.
+                    changedUsers.push({ userConfig, userId: user.id, userName: user.username })
+                    configurationFound = true;
+                }
+            });
+            if (!configurationFound) {
+                //This means that the user is not found on any configuration. Unassign this user from the orgUnit.
+                unasignedObjects.users.push(user)
+            }
+        })
+    }
+
+    //Filter users to create.
+    const usersToCreate = userConfigsToBeAssigned.filter(userConfig => {
+        let userNotFound = true;
+        changedUsers.forEach(userChange => {
+            if (userChange.userName === existingOrgUnit.code + userConfig.suffix) {
+                userNotFound = false;
+                return userNotFound
+            }
+        })
+        return userNotFound;
+    })
+
+
+    let allChange: AllChange = {
+        newAssignments: {
+            dataSetsToAssign: dataSetsToBeAssigned.filter(ds => !unChangedObjects.dataSets.includes(ds)),
+            cocToAssign: catCombosToBeAssigned.filter(co => !unChangedObjects.categoryOptions.includes(co)),
+            ougToAssign: ougsToBeAssigned.filter(oug => !unChangedObjects.organisationUnitGroups.includes(oug)),
+            usersToCreate: usersToCreate
+        },
+        unassigns: {
+            coc: unasignedObjects.categoryOptions,
+            dataSets: unasignedObjects.dataSets,
+            oug: unasignedObjects.organisationUnitGroups,
+            users: unasignedObjects.users
+        },
+        unChangedAssignments: {
+            coc: unChangedObjects.categoryOptions,
+            dataSets: unChangedObjects.dataSets,
+            oug: unChangedObjects.organisationUnitGroups,
+            users: []
+        },
+        changedUsers: changedUsers,
+        changeType: changeType,
+        dhisOrgUnitObject: existingOrgUnit
+    }
+
+    return allChange
+}
+
+export const findMatchingNames = (stringToFind: string | undefined, stringList: string[]): string[] => {
+    if (stringToFind === undefined) {
+        return [];
+    }
+    const bestMatchResult = stringSimilarity.findBestMatch(stringToFind, stringList);
+    return bestMatchResult.ratings
+        .filter(item => item.rating > 0.8)
+        .sort((a, b) => a.rating - b.rating)
+        .map(item => item.target);
+}
+
 export const remapAttributeValues = (objects) => {
     objects.forEach(obj => {
         obj.attributeValues.forEach(attVal => {
@@ -113,18 +249,18 @@ export const remapAttributeValues = (objects) => {
 
 export const getApplicableConfigurations = (
     allConfigurations: Configuration[],
-    approvedObject: MFRMapped,
+    approvedObject: MFRMapped | Object,
+    bulk: boolean = false,
 ) => {
     let applicableConfigurations: Configuration[] = [];
     allConfigurations.forEach(config => {
-        let allOptionsTrue = true;
-        Object.keys(config.optionSets).forEach(option => {
+        let different = Object.keys(config.optionSets).some(option => {
             //If there is one option that doesn't satisfy then ignore that configuration.
-            if (config.optionSets[option] !== approvedObject[option].toString()) {
-                allOptionsTrue = false;
+            if (config.optionSets[option] !== (!bulk ? approvedObject[option]?.toString() : "")) {
+                return true;
             }
         })
-        if (allOptionsTrue) {
+        if (!different) {
             //If all options meet the criteria then consider that configuration.
             applicableConfigurations.push(config)
         }

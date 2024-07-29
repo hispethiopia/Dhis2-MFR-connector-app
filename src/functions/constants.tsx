@@ -28,7 +28,7 @@ export const USER_CHANGE_TYPES = {
 
 
 
-export const mfrMapping = {
+export const MFRMapping = {
     mfrId: "resource_id",
     /**
      * Date time of MFR, found in meta_lastUpdated
