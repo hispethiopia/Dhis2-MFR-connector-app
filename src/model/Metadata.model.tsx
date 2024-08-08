@@ -52,6 +52,11 @@ interface OrganisationUnitCondensed {
     attributeValues: {[code: string]: String}
 }
 
+interface UserRolesCondensed {
+    id: string,
+    displayName: string,
+}
+
 
 interface Metadata {
     organisationUnitGroups: OrganisationUnitGroup[],
@@ -65,6 +70,7 @@ interface Metadata {
     me: {
         organisationUnits: OrganisationUnitCondensed[],
         username: string,
+        userRoles: UserRolesCondensed[]
     }
 }
 
@@ -80,7 +86,8 @@ const getEmptyMetadata = (): Metadata => {
         userRoles: [],
         me: {
             organisationUnits: [],
-            username: ''
+            username: '',
+            userRoles: [],
         },
     }
 }
