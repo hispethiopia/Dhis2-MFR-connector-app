@@ -171,7 +171,7 @@ const ConfigurationForm: React.FC = () => {
     }, [configurationObject]);
 
     const handleCancel = () => {
-        navigate('/')
+        navigate('/edit')
     }
 
     const setConfigurationField = ({ field, value }) => {

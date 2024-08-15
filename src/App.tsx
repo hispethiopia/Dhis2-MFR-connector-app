@@ -78,9 +78,9 @@ const App = () => {
                                 </div>
                                 <div className='right'>
                                     <Routes>
-                                        <Route path="/" element={<ConfigurationList />} />
+                                        <Route path="/" element={<PendingApprovalsList />} />
+                                        <Route path="/edit" element={<ConfigurationList />} />
                                         <Route path="/add" element={<ConfigurationForm />} />
-                                        <Route path="/approveImports" element={<PendingApprovalsList />} />
                                         <Route path="/logs" element={<Logs />} />
                                         <Route path="/edit/:Key" element={<ConfigurationForm />} />
                                         <Route path="/settings" element={<SettingsPage />} />

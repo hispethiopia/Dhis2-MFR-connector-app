@@ -170,7 +170,7 @@ export const getChanges = (mfrObject: MFRMapped,
             //Find the configuration for this user.
             let configurationFound = false;
             userConfigsToBeAssigned.forEach(userConfig => {
-                if (user.username === existingOrgUnit.code + userConfig.suffix) {
+                if (user.username === mfrObject.mfrCode + userConfig.suffix) {
                     //If the suffix is found, then the user has been found.
                     changedUsers.push({ userConfig, userId: user.id, userName: user.username })
                     configurationFound = true;
@@ -187,7 +187,7 @@ export const getChanges = (mfrObject: MFRMapped,
     const usersToCreate = userConfigsToBeAssigned.filter(userConfig => {
         let userNotFound = true;
         changedUsers.forEach(userChange => {
-            if (userChange.userName === existingOrgUnit.code + userConfig.suffix) {
+            if (userChange.userName === mfrObject.mfrCode + userConfig.suffix) {
                 userNotFound = false;
                 return userNotFound
             }

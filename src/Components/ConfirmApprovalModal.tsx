@@ -9,7 +9,7 @@ import { Button, ButtonStrip, DataTable, DataTableCell, DataTableColumnHeader, D
 import { FullScreenLoader } from './FullScreenLoader';
 import { generateId, generatePassword } from '../functions/helpers';
 import { UserConfig } from '../model/Configuration.model';
-import { CHANGE_TYPE_CREATE, MFR_FACILITY_TYPE_ATTRIBUTE_UID, MFR_IS_PHCU_ATTRIBUTE_UID, MFR_LAST_UPDATED_ATTRIBUTE_UID, MFR_LOCATION_ATTRIBUTE_UID, MFR_OPERATIONAL_STATUS_ATTRIBUTE_UID, MFR_OWNERSHIP_ATTRIBUTE_UID, MFR_SETTLEMENT_ATTRIBUTE_UID, MFRMapping } from '../functions/constants';
+import { CHANGE_TYPE_CREATE, MFR_FACILITY_TYPE_ATTRIBUTE_UID, MFR_IS_PHCU_ATTRIBUTE_UID, MFR_LAST_UPDATED_ATTRIBUTE_UID, MFR_LOCATION_ATTRIBUTE_UID, MFR_OPERATIONAL_STATUS_ATTRIBUTE_UID, MFR_OWNERSHIP_ATTRIBUTE_UID, MFR_PASSWORD_RECEIVERS_USER_GROUP_UID, MFR_SETTLEMENT_ATTRIBUTE_UID, MFRMapping } from '../functions/constants';
 
 
 interface ModalProps {
@@ -18,6 +18,7 @@ interface ModalProps {
     pendingApproval: MFRMapped;
     onClose: Function;
     parentOrgUnitId: string;
+    onCloseSuccessful: Function;
 }
 
 const categoryOptionsFromOrgUnitQuery = {
@@ -166,13 +167,12 @@ const generateOrgUnitObject = (orgUnitId: string, pendingApproval: MFRMapped, ge
             { "value": pendingApproval.isPHCU, attribute: { "id": MFR_IS_PHCU_ATTRIBUTE_UID } },
             { "value": pendingApproval.FT, attribute: { "id": MFR_FACILITY_TYPE_ATTRIBUTE_UID } }
         ]
-
     }
 }
 
 
 export const ConfirmApprovalModal: React.FC<ModalProps> = ({
-    existingDhisObject, changeType, pendingApproval, onClose, parentOrgUnitId
+    existingDhisObject, changeType, pendingApproval, onClose, parentOrgUnitId, onCloseSuccessful
 }) => {
 
     const metadata = useContext(MetadataContext)
@@ -233,14 +233,18 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
         let dataSetIds: string[] = []
         dataSetIds.push(...allChanges?.newAssignments.dataSetsToAssign)
         dataSetIds.push(...allChanges.unassigns.dataSets)
+        dataSetIds.push(...allChanges.unChangedAssignments.dataSets)
 
         let ougIds: string[] = []
         ougIds.push(...allChanges.newAssignments.ougToAssign)
         ougIds.push(...allChanges.unassigns.oug)
+        ougIds.push(...allChanges.unChangedAssignments.oug)
 
         let categoryOptionIds: string[] = []
         categoryOptionIds.push(...allChanges.newAssignments.cocToAssign)
         categoryOptionIds.push(...allChanges.unassigns.coc)
+        categoryOptionIds.push(...allChanges.unChangedAssignments.coc)
+
 
         let userIds: string[] = []
         userIds.push(...allChanges.unassigns.users.map(user => user.id))
@@ -300,7 +304,12 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
     const handleApproval = async () => {
         setAnyLoading(true);
         //for orgUnitId, if it is an update use DHIS2 object, or use the mfr DHIS2 id if it exists otherwise create a new one.
-        let orgUnitId = existingDhisObject ? existingDhisObject.id : pendingApproval.dhisId ?? generateId(11)
+        let orgUnitId = existingDhisObject ? existingDhisObject.id : pendingApproval?.dhisId
+
+        if (!existingDhisObject && (!pendingApproval?.dhisId || pendingApproval.dhisId === "")) {
+            orgUnitId = generateId(11)
+        }
+
         let orgUnitCode = pendingApproval.mfrCode
 
         let dataSetPayload: any[] = [];
@@ -352,10 +361,14 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
         }))
 
         let usersToCreate: any[] = [];
+        let createdUsersPayload: any[] = []
 
         allChanges?.newAssignments.usersToCreate.forEach(uc => {
-            usersToCreate.push(...[createUserPayload(uc, pendingApproval, orgUnitId, parentOrgUnitId)])
+            let newUserPayload = createUserPayload(uc, pendingApproval, orgUnitId, parentOrgUnitId)
+            createdUsersPayload.push(newUserPayload)
+            usersToCreate.push(...[newUserPayload])
         })
+
 
         //look for users that need to be unassigned.
         let unassignedUsers = maintainAssignment({
@@ -424,7 +437,31 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
                 username: metadata.me.username
             })
 
-             await approvalDeleteMutation({ id: pendingApproval.mfrId })
+            if (usersToCreate.length > 0) {
+                const messageText = `${pendingApproval.reportingHierarchyName}\n${pendingApproval.name}\n
+Users created: \n${createdUsersPayload.map(user => { return `username: "${user.username}" password: "${user.password}"\n` })}`
+                await messageMutation({
+                    data: {
+                        text: messageText,
+                        userGroups: [
+                            { "id": MFR_PASSWORD_RECEIVERS_USER_GROUP_UID, "type": "userGroup" }
+                        ],
+                        users: [{
+                            "id": metadata.me.id, "type": "user"
+                        }],
+                        subject: "User password " + pendingApproval.name,
+                        attachments: [],
+                        organisationUnits: [],
+                    }
+                });
+            }
+
+
+
+            if (!pendingApproval.isPHCU) {
+                //if it is PHCU don't delete the request because it doesn't exist and it will create an error
+                await approvalDeleteMutation({ id: pendingApproval.mfrId })
+            }
             setFinishedSaving(true)
             setAnyLoading(false);
             await showAndSaveLog({
@@ -492,8 +529,9 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
     return (
         <Modal large>
             {anyLoading && <FullScreenLoader />}
+
             <ModalTitle>
-                Confirm Approval?
+                {anyLoading ? "Loading, please wait..." : "Confirm Approval?"}
             </ModalTitle>
             <ModalContent>
                 {
@@ -549,6 +587,29 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
                                     {(allChanges?.newAssignments.dataSetsToAssign.length ?? 0)}
                                 </DataTableCell>
 
+                            </DataTableRow>
+                            <DataTableRow
+                                expandableContent={
+                                    <div>
+                                        Data sets Unchanged: {
+                                            allChanges?.unChangedAssignments.dataSets
+                                                .map(ds => fetchedObjects.dataSets[ds].displayName)
+                                                .map(name => <>{name}<br /></>)
+                                        }
+                                    </div>
+                                }
+                                expanded={expanded === "dataSetsUnChanged"}
+                                onExpandToggle={() => expanded !== "dataSetsUnChanged" ? setExpanded("dataSetsUnChanged") : setExpanded('')}
+                            >
+                                <DataTableCell>
+                                    Data sets
+                                </DataTableCell>
+                                <DataTableCell>
+                                    UnChanged
+                                </DataTableCell>
+                                <DataTableCell>
+                                    {(allChanges?.unChangedAssignments.dataSets.length ?? 0)}
+                                </DataTableCell>
                             </DataTableRow>
                             <DataTableRow
                                 expandableContent={
@@ -623,6 +684,29 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
                             <DataTableRow
                                 expandableContent={
                                     <div>
+                                        Category options Unchanged: {
+                                            allChanges?.unChangedAssignments.coc
+                                                .map(co => fetchedObjects.categoryOptions[co].displayName)
+                                                .map(name => <>{name}<br /></>)
+                                        }
+                                    </div>
+                                }
+                                expanded={expanded === "categoryOptionsUnChanged"}
+                                onExpandToggle={() => expanded !== "categoryOptionsUnChanged" ? setExpanded("categoryOptionsUnChanged") : setExpanded('')}
+                            >
+                                <DataTableCell>
+                                    Category options
+                                </DataTableCell>
+                                <DataTableCell>
+                                    UnChanged
+                                </DataTableCell>
+                                <DataTableCell>
+                                    {(allChanges?.unChangedAssignments.coc.length ?? 0)}
+                                </DataTableCell>
+                            </DataTableRow>
+                            <DataTableRow
+                                expandableContent={
+                                    <div>
                                         Organisation unit groups to assign: {
                                             allChanges?.newAssignments.ougToAssign
                                                 .map(co => fetchedObjects.organisationUnitGroups[co].displayName)
@@ -665,6 +749,29 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
                                 </DataTableCell>
                                 <DataTableCell>
                                     {(allChanges?.unassigns.coc.length ?? 0)}
+                                </DataTableCell>
+                            </DataTableRow>
+                            <DataTableRow
+                                expandableContent={
+                                    <div>
+                                        Organisation unit groups Unchanged: {
+                                            allChanges?.unChangedAssignments.oug
+                                                .map(oug => fetchedObjects.organisationUnitGroups[oug].displayName)
+                                                .map(name => <>{name}<br /></>)
+                                        }
+                                    </div>
+                                }
+                                expanded={expanded === "ougUnChanged"}
+                                onExpandToggle={() => expanded !== "ougUnChanged" ? setExpanded("ougUnChanged") : setExpanded('')}
+                            >
+                                <DataTableCell>
+                                    Organisation unit groups
+                                </DataTableCell>
+                                <DataTableCell>
+                                    UnChanged
+                                </DataTableCell>
+                                <DataTableCell>
+                                    {(allChanges?.unChangedAssignments.oug.length ?? 0)}
                                 </DataTableCell>
                             </DataTableRow>
                             <DataTableRow
@@ -745,11 +852,11 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
                 {
                     (finishedSaving || errorOccured !== null) &&
                     <ButtonStrip end>
-                        <Button primary onClick={() => onClose()}
+                        <Button primary onClick={() => onCloseSuccessful()}
                         >Close</Button>
                     </ButtonStrip>
                 }
-                {!finishedSaving && errorOccured === null &&
+                {!finishedSaving && errorOccured === null && fetchedObjects &&
                     <ButtonStrip>
                         <Button destructive onClick={() => handleApproval()}>
                             Yes

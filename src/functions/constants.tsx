@@ -6,17 +6,19 @@ export const MFR_LAST_UPDATED_ATTRIBUTE_UID = "JhrOESQAVor"
 export const MFR_IS_PHCU_ATTRIBUTE_UID = "YLW32aoKTPy"
 export const MFR_FACILITY_TYPE_ATTRIBUTE_UID = "jfNsdZwddzD"
 
+export const MFR_PASSWORD_RECEIVERS_USER_GROUP_UID = "S2LrF6TpORx"
+
 export const MFR_OPTION_SETS_ATTRIBUTE_CODE = "MFR_OPTION_SETS"
 export const MFR_LOCATION_CODE = "MFR_LOCATION_ID"
-export const MFR_OPTION_SETS_ATTRUBUTE_UID="DxkKrvXAe5y"
+export const MFR_OPTION_SETS_ATTRUBUTE_UID = "DxkKrvXAe5y"
 export const CHANGE_TYPE_CREATE = "CHANGE_TYPE_CREATE"
 export const CHANGE_TYPE_UPDATE = "CHANGE_TYPE_UPDATE"
 export const CHANGE_TYPE_NEW_MAPPING = "CHANGE_TYPE_NEW_MAPPING"
 export const CHANGE_TYPE_DELETE = "CHANGE_TYPE_DELETE"
 export const CHANGE_TYPE_DISABLE = "CHANGE_TYPE_DISABLE"
 
-export const USER_GROUPS_TO_SEND_MESSAGE=[
-    {id:"sjVAIaP2jZd"}
+export const USER_GROUPS_TO_SEND_MESSAGE = [
+    { id: "sjVAIaP2jZd" }
 ]
 
 
@@ -50,6 +52,7 @@ export const MFRMapping = {
      * The path of the facility using MFR ids_
      *  */
     reportingHierarchyId: "resource_extension_reportingHierarchyId",
+    reportingHierarchyIdCondensed: "reportingHierarchyId",
     /**
      * Closed date in MFR_
      */

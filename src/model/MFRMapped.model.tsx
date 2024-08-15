@@ -35,6 +35,7 @@ export interface MFRMapped {
     closedDate: Date | null,
     suspensionStartDate: Date | null,
     suspensionEndDate: Date | null,
+    healthCenterId: string | null,
     /**
      * Type of settlement in MFR.
      */

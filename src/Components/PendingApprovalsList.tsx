@@ -6,29 +6,50 @@ import { MFR_LOCATION_ATTRIBUTE_UID, MFRMapping } from '../functions/constants';
 import { debounce, remapMFR } from '../functions/services';
 import { changeToPHCUName } from '../functions/helpers';
 import { FullScreenLoader } from './FullScreenLoader';
-import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, Switch, TableBody, TableHead } from '@dhis2/ui';
+import { Button, DataTable, DataTableCell, DataTableColumnHeader, DataTableRow, Pagination, Switch, TableBody, TableHead } from '@dhis2/ui';
 import { ApproveDetailModal } from './ApproveDetailModal';
 
 const pendingApprovalsQuery = {
     approvalStatus: {
         resource: 'dataStore/Dhis2-MFRApproval',
-        params: ({ page, pageSize, searchTerm }) => {
+        params: ({ page, pageSize, searchTerm, captureMfrId }) => {
             if (searchTerm !== '') {
                 return {
                     fields: '.',
                     page,
                     pageSize,
-                    filter: `${MFRMapping.name}:ilike:${searchTerm}`
+                    filter: [`${MFRMapping.name}:ilike:${searchTerm}`, `${MFRMapping.reportingHierarchyIdCondensed}:like:${captureMfrId}`]
                 }
             } else {
                 return {
                     fields: '.',
                     page,
-                    pageSize
+                    pageSize,
+                    filter: `${MFRMapping.reportingHierarchyIdCondensed}:like:${captureMfrId}`
                 }
             }
         },
     },
+    approvalWithId: {
+        resource: 'dataStore/Dhis2-MFRApproval',
+        params: ({ page, pageSize, searchTerm, captureMfrId }) => {
+            if (searchTerm !== '') {
+                return {
+                    fields: '.',
+                    page,
+                    pageSize,
+                    filter: [`${MFRMapping.mfrId}:ilike:${searchTerm}`, `${MFRMapping.reportingHierarchyIdCondensed}:like:${captureMfrId}`]
+                }
+            } else {
+                return {
+                    fields: '.',
+                    page,
+                    pageSize,
+                    filter: `${MFRMapping.reportingHierarchyIdCondensed}:like:${captureMfrId}`
+                }
+            }
+        },
+    }
 };
 
 const rejectedListQuery = {
@@ -51,7 +72,7 @@ const PendingApprovalsList = () => {
 
     const { loading: loadingRejectedList, data: rejectedList, refetch: getRejectedList } = useDataQuery(rejectedListQuery)
     const { loading: loadingPendingApprovals, error: errorPendingApprovals, data: allApprovals, refetch: refetchPendingApprovals } = useDataQuery(
-        pendingApprovalsQuery, { variables: { page: pageNumber, pageSize: pageSize, searchTerm } }
+        pendingApprovalsQuery, { variables: { page: pageNumber, pageSize: pageSize, searchTerm, captureMfrId: metadata.me.organisationUnits[0].attributeValues[MFR_LOCATION_ATTRIBUTE_UID] } }
     )
     const [finishedLoading, setFinishedLoading] = useState(loadingRejectedList || loadingPendingApprovals)
     let remappedRejectedList = {}
@@ -67,9 +88,16 @@ const PendingApprovalsList = () => {
         if (allApprovals && getRejectedList) {
             let userOrgUnitsMFRids = metadata.me.organisationUnits.map(orgUnit => orgUnit.attributeValues[MFR_LOCATION_ATTRIBUTE_UID])
             let mappedApprovals = remapMFR(allApprovals.approvalStatus.entries)
+            mappedApprovals.push(...remapMFR(allApprovals.approvalWithId.entries))
             let finalList: MFRMapped[] = [];
+            let ids: string[] = []
 
             mappedApprovals.forEach(approval => {
+                if (ids.includes(approval.mfrId)) {
+                    //this facility has already been seen.
+                    return null;
+                }
+                ids.push(approval.mfrId)
                 if (approval.isPHCU) {
                     //This is a PHCU, therefore we need to handle it's parent PHCU by adding another approval for the PHCU.
                     let phcuApproval: MFRMapped = { ...approval }
@@ -77,6 +105,7 @@ const PendingApprovalsList = () => {
                     phcuApproval.facilityId = approval.facilityId + "_PHCU"
                     phcuApproval.mfrCode = approval.mfrCode + "_PHCU"
                     phcuApproval.dhisId = ""
+                    phcuApproval.healthCenterId = approval.dhisId
                     phcuApproval.name = changeToPHCUName(phcuApproval.name)
 
                     //PHCU approval already has the _PHCU.
@@ -118,7 +147,7 @@ const PendingApprovalsList = () => {
 
     useEffect(() => {
         setFinishedLoading(false)
-        refetchPendingApprovals({ page: pageNumber, pageSize: pageSize, searchTerm })
+        refetchPendingApprovals({ page: pageNumber, pageSize: pageSize, searchTerm, captureMfrId: metadata.me.organisationUnits[0].attributeValues[MFR_LOCATION_ATTRIBUTE_UID] })
     }, [pageNumber, pageSize, searchTerm])
 
     const handleSearch = useCallback(debounce((value) => {
@@ -214,8 +243,20 @@ const PendingApprovalsList = () => {
                                     )
                                 })
                             }
+                            <Pagination
+                                pageSize={pageSize}
+                                page={pageNumber}
+                                onPageChange={(pageNum) => {
+                                    setPageNumber(pageNum)
+                                }}
+                                pageCount={pendingApprovals && pendingApprovals.length >= pageSize ? pageNumber + 1 : pageNumber}
+                                hidePageSelect
+                                onPageSizeChange={(size) => {
+                                    setPageSize(size)
+                                }} />
                         </TableBody>
                     </DataTable>
+
                 </>
             }{
                 selectedPendingApproval &&
@@ -225,6 +266,7 @@ const PendingApprovalsList = () => {
                         refetchPendingApprovals();
                         getRejectedList();
                         setSelectedPendingApproval(null)
+                        
                     }}
                     pendingApproval={selectedPendingApproval}
                     rejectStatus={remappedRejectedList[selectedPendingApproval.mfrId + "_" + selectedPendingApproval.lastUpdated?.toISOString()]}

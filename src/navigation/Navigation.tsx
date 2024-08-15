@@ -25,26 +25,24 @@ NavigationItem.propTypes = {
 
 export const Navigation = () => {
     const metadata = useContext(MetadataContext)
-
     return (
         <Menu>
             <NavigationItem
-                label="Configurations"
+                label="Approval"
                 path="/"
-                isAuthenticated={metadata.me.userRoles.some(userRole => userRole.displayName === "Superuser")}
+                isAuthenticated={true}
             />
-
             <NavigationItem
                 label="Logs"
                 path="/logs"
                 isAuthenticated={true}
             />
-
             <NavigationItem
-                label="Approval"
-                path="/approveImports"
-                isAuthenticated={true}
+                label="Configurations"
+                path="/edit"
+                isAuthenticated={metadata.me.userRoles.some(userRole => userRole.displayName === "Superuser")}
             />
+
             <NavigationItem
                 label="Settings"
                 path="/settings"

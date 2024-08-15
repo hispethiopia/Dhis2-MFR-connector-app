@@ -6,7 +6,7 @@ import { CHANGE_TYPE_CREATE, CHANGE_TYPE_NEW_MAPPING, CHANGE_TYPE_UPDATE, MFR_FA
 import { FullScreenLoader } from './FullScreenLoader';
 import { MetadataContext } from '../App';
 import { useLoggingContext } from './Logging';
-import { findMatchingNames, getChanges } from '../functions/services';
+import { findMatchingNames } from '../functions/services';
 import { ChangeType } from '../model/Approvals.model';
 import { ConfirmApprovalModal } from './ConfirmApprovalModal';
 
@@ -28,8 +28,7 @@ const checkOrgUnitUsingMFRIDQuery = {
                 "attributeValues.attribute.id:eq:" + MFR_LOCATION_ATTRIBUTE_UID,
                 , "attributeValues.value:in:[" + mfrIds + "]"
             ],
-            fields: "*,attributeValues[value,attribute[id,code]],ancestors[id,displayName],children[id,displayName],users[*]"
-
+            fields: "*,attributeValues[value,attribute[id,code]],users[*],ancestors[id,displayName],children[id,displayName]"//we want children because we will check siblings for new creations.
         })
     }
 }
@@ -44,6 +43,38 @@ const checkOrgUnitUsingMFRCodeQuery = {
             fields: "id"
         })
     }
+}
+
+const getOrganisationunitWithDhisId = {
+    organisationUnits: {
+        resource: 'organisationUnits',
+        params: ({ dhisId }) => ({
+            filter: "id:eq:" + dhisId,
+            fields: "*,attributeValues[value,attribute[id,code]],users[*],ancestors[id,displayName],children[id,displayName]"
+        })
+    }
+}
+
+const getHealthCenterParentDetails = {
+    organisationUnits: {
+        resource: 'organisationUnits',
+        params: ({ dhisId }) => ({
+            filter: "id:eq:" + dhisId,
+            fields: "parent[*,attributeValues[value,attribute[id,code]],users[*],ancestors[id,displayName],children[id,displayName]]"
+        })
+    }
+}
+
+
+
+const settingsQuery = {
+    settings: {
+        resource: 'dataStore/Dhis2-MFR/settings',
+        params: {
+            fields: 'name,Key',
+            paging: false,
+        },
+    },
 }
 
 const rejectedListQuery = {
@@ -87,13 +118,27 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
     //getFacility and parent.
     let mfrIds = pendingApproval?.reportingHierarchyId.split("/").slice(0, 2);
     //Get DHIS2 orgUnit using the MFR id and the DHIS2 id.
-    const { loading: loadingOrgUnitWithMFRId, error: errorOrgUnitWithMFRId, data: ouWithMFRid, called: called } = useDataQuery(checkOrgUnitUsingMFRIDQuery, {
+    const { loading: loadingOrgUnitWithMFRId, error: errorOrgUnitWithMFRId, data: ouWithMFRid, refetch: getOrgUnitsWithMfrId } = useDataQuery(checkOrgUnitUsingMFRIDQuery, {
         variables: { mfrIds: mfrIds?.join(',') }
     })
 
+    //Since calling using attribute values takes a lot of time to respond, only call it when it is necessary.
     const { loading: loadingOrgUnitWithMFRCode, error: errorOrgUnitWithMFRCode, data: ouWithMFRCode } = useDataQuery(checkOrgUnitUsingMFRCodeQuery, {
         variables: { mfrCode: pendingApproval?.mfrCode }
     })
+
+    const { loading: loadingHealthCenter, error: errorHealthCenter, data: healthCenter } = pendingApproval.healthCenterId ? useDataQuery(getHealthCenterParentDetails, {
+        variables: { dhisId: pendingApproval.healthCenterId }
+    }) : { loading: null, error: null, data: null }
+    const phcuItem = healthCenter?.organisationUnits.organisationUnits[0]?.parent && healthCenter?.organisationUnits.organisationUnits[0]?.parent.displayName.includes("PHCU") ? healthCenter?.organisationUnits.organisationUnits[0]?.parent : null
+
+    const { loading: loadingOrgUnitWithDhisId, error: errorOrgUnitWithDhisId, data: ouWithDhisIdData } = pendingApproval.dhisId ? useDataQuery(getOrganisationunitWithDhisId, {
+        variables: { dhisId: pendingApproval?.dhisId }
+    }) : { loading: false, error: null, data: null };
+    const ouWithDhisId = ouWithDhisIdData?.organisationUnits.organisationUnits[0]
+
+    const { loading: loadingSettings, error: errorSettings, data: settingsData } = useDataQuery(settingsQuery)
+    const settings = settingsData?.settings
 
     const { loading: loadingRejectedList, data: rejectedList, refetch: getRejectedList } = useDataQuery(rejectedListQuery, { lazy: true })
     const [uploadRejectedList] = useDataMutation(uploadRejectedListQuery, {
@@ -105,16 +150,16 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
     const allLoading = (loadingOrgUnitWithMFRCode || loadingOrgUnitWithMFRId || loadingRejectedList)
 
     useEffect(() => {
-        if (ouWithMFRCode && ouWithMFRid) {
+        if (!loadingOrgUnitWithDhisId && !loadingOrgUnitWithMFRCode && !loadingOrgUnitWithMFRId) {
             let errors: string[] = [];
-            let tempChangeType: ChangeType;
+            let tempChangeType: ChangeType | null = null;
             /**
              * Here compare the DHISid in the pendingApproval with that we get from DHIS2 using the MFR id, and the MFR code are the same, 
              * if they are not the same, then there is a msismatch and we can't map this facility.
              */
             let orgUnitWithMFRId: any = null;
             let parentOrgUnit: any = null;
-            ouWithMFRid.organisationUnits.organisationUnits.forEach(ou => {
+            ouWithMFRid?.organisationUnits.organisationUnits.forEach(ou => {
                 ou.attributeValues.forEach(attribute => {
                     ou.attributeValues[attribute.attribute.id] = attribute.value
                     ou.attributeValues[attribute.attribute.code] = attribute.value
@@ -127,7 +172,13 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                 }
             })
 
+            let orgUnitWithDhisId = pendingApproval.isPHCU ? phcuItem : ouWithDhisId
+            console.log("Melaeke phcu item is ", phcuItem, orgUnitWithDhisId, ouWithDhisIdData)
+
+
             let orgUnitWithMFRCode = ouWithMFRCode.organisationUnits.organisationUnits[0]
+
+            //Get the orgUnit with DHISid and then make sure the change type reflects that.
 
             if (orgUnitWithMFRCode && !orgUnitWithMFRId ||
                 !orgUnitWithMFRCode && orgUnitWithMFRId ||
@@ -141,42 +192,54 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                 errors.push(`Mapping that is done using MFR id and DHIS2 id are not pointing to the same orgUnit.
                     Facility id ${pendingApproval?.mfrId} already pointing to a facility in DHIS2 with Id ${orgUnitWithMFRCode.id} `)
             }
+            if (pendingApproval.dhisId && !orgUnitWithDhisId) {
+                errors.push(`DHIS2 id from MFR is not pointing to an existing facility.
+                    Dhis2 id from MFR is ${pendingApproval?.dhisId}`)
+            }
             if (errors.length === 0 && orgUnitWithMFRId) {
                 setOrgUnit(orgUnitWithMFRId)
-            }
-            if (parentOrgUnit) {
-                setParentOrgUnit(parentOrgUnit)
-
-                if (parentOrgUnit?.children.length > 0) {
-                    const siblingsWithSimilarNames = findMatchingNames(pendingApproval?.name, parentOrgUnit.children.map(ou => ou.displayName))
-                    if (siblingsWithSimilarNames.length > 0) {
-                        const warningMessages = [`There are already facilities with the following names, please make sure the facility you are importing is different. ${siblingsWithSimilarNames.join(" , ")}`]
-                        setWarningMessages(warningMessages);
-                    }
-                }
-            } else {
-                errors.push(`Parent facility not imported into DHIS2. Parent facility id is "${pendingApproval?.reportingHierarchyId.split('/')[1]}`)
+            } else if (errors.length === 0 && orgUnitWithDhisId) {
+                setOrgUnit(orgUnitWithDhisId)
             }
 
             //Find change type only if there are no errors.
             if (errors.length === 0) {
-                //Then this is an update
-                if (orgUnitWithMFRId) {
+                if (orgUnitWithMFRId?.attributeValues[MFR_LOCATION_ATTRIBUTE_UID] === pendingApproval.mfrId) {
+                    tempChangeType = CHANGE_TYPE_UPDATE
+                } else if (pendingApproval.dhisId && orgUnitWithDhisId) {
+                    tempChangeType = CHANGE_TYPE_NEW_MAPPING
+                } else if (orgUnitWithDhisId) {
                     //This means that there is a mapping already done.
-                    if (orgUnitWithMFRId.attributeValues[MFR_LOCATION_ATTRIBUTE_UID] === pendingApproval.mfrId) {
-                        tempChangeType = CHANGE_TYPE_UPDATE
-                    } else {
-                        tempChangeType = CHANGE_TYPE_NEW_MAPPING
-                    }
+                    tempChangeType = CHANGE_TYPE_UPDATE
                 } else {
                     tempChangeType = CHANGE_TYPE_CREATE
                 }
 
+                if (parentOrgUnit) {
+                    console.log("Melaeke parentOrgunit is ", parentOrgUnit)
+                    setParentOrgUnit(parentOrgUnit)
+
+                    if (parentOrgUnit?.children.length > 0 && tempChangeType === CHANGE_TYPE_CREATE) {
+                        const siblingsWithSimilarNames = findMatchingNames(pendingApproval?.name, parentOrgUnit.children.map(ou => ou.displayName))
+                        if (siblingsWithSimilarNames.length > 0) {
+                            const warningMessages = [`There are already facilities with the following names, please make sure the facility you are importing is different. ${siblingsWithSimilarNames.join(" , ")}`]
+                            setWarningMessages(warningMessages);
+                        }
+                    }
+                } else {
+                    errors.push(`Parent facility not imported into DHIS2. Parent facility id is "${pendingApproval?.reportingHierarchyId.split('/')[1]}`)
+                }
+
                 setChangeType(tempChangeType)
+            }
+
+
+            if (tempChangeType === CHANGE_TYPE_CREATE && !settings?.enableCreation) {
+                warningMessages.push("Facility creation not allowed because of system settings.")
             }
             setErrorMessages(errors)
         }
-    }, [ouWithMFRCode, ouWithMFRid])
+    }, [ouWithMFRCode, ouWithMFRid, ouWithDhisId, healthCenter])
 
     const getCellStyle = (condition) => ({
         backgroundColor: condition ? 'lightgreen' : ''
@@ -217,7 +280,7 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
 
     {/**If polygon, just show polygon, but if point, show the point. */ }
     const locationOld = orgUnit?.geometry?.type === "Point" ? orgUnit.geometry.coordinates.join(" / ") : orgUnit?.geometry?.type
-    const locationNew = pendingApproval?.latitude + " / " + pendingApproval?.longitude
+    const locationNew = pendingApproval?.longitude + " / " + pendingApproval?.latitude
 
     return (
         <>
@@ -228,6 +291,10 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                     existingDhisObject={orgUnit}
                     pendingApproval={pendingApproval}
                     onClose={onCloseConfirmApprovalModal}
+                    onCloseSuccessful={() => {
+                        setApprove(false)
+                        onCloseAndRefresh();
+                    }}
                 />
 
             }
@@ -235,8 +302,16 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                 {allLoading &&
                     <FullScreenLoader />
                 }
-                {changeType &&
-                    <h1>{changeType}</h1>
+                {changeType && errorMessages.length === 0 &&
+                    <h1>Status: {changeType === CHANGE_TYPE_NEW_MAPPING ? "New mapping" :
+                        changeType === CHANGE_TYPE_CREATE ? "Create new facility" :
+                            changeType === CHANGE_TYPE_UPDATE ? "Update orgUnit" : changeType}
+                        <br />   Operation: {pendingApproval.operationalStatus === "Closed" ? "Closing" :
+                            pendingApproval.operationalStatus === "Operational" ? "Operational" :
+                                pendingApproval.operationalStatus === "Curently Not Operational" ? "Closing" :
+                                    pendingApproval.operationalStatus === "Suspended" ? "Closing" : pendingApproval.operationalStatus
+                        }
+                    </h1>
 
                 }{
                     errorMessages.length > 0 &&
@@ -274,19 +349,24 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                                 <DataTableCell style={getCellStyle(pendingApproval?.mfrId !== orgUnit?.attributeValues[MFR_LOCATION_ATTRIBUTE_UID])}>{pendingApproval?.mfrId}</DataTableCell>
                             </DataTableRow>
                             <DataTableRow>
-                                <DataTableCell style={getCellStyle(pendingApproval?.lastUpdated !== orgUnit?.attributeValues[MFR_LAST_UPDATED_ATTRIBUTE_UID])}>MFR last updated</DataTableCell>
-                                <DataTableCell style={getCellStyle(pendingApproval?.lastUpdated !== orgUnit?.attributeValues[MFR_LAST_UPDATED_ATTRIBUTE_UID])}>{orgUnit?.attributeValues[MFR_LAST_UPDATED_ATTRIBUTE_UID]}</DataTableCell>
-                                <DataTableCell style={getCellStyle(pendingApproval?.lastUpdated !== orgUnit?.attributeValues[MFR_LAST_UPDATED_ATTRIBUTE_UID])}>{pendingApproval?.lastUpdated?.toISOString()}</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.dhisId !== orgUnit?.id)}>DHIS2 id</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.dhisId !== orgUnit?.id)}>{orgUnit?.id}</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.dhisId !== orgUnit?.id)}>{pendingApproval?.dhisId}</DataTableCell>
                             </DataTableRow>
                             <DataTableRow>
-                                <DataTableCell style={getCellStyle(pendingApproval?.closedDate !== orgUnit?.closedDate)}>Closed date</DataTableCell>
-                                <DataTableCell style={getCellStyle(pendingApproval?.closedDate !== orgUnit?.closedDate)}>{orgUnit?.closedDate}</DataTableCell>
-                                <DataTableCell style={getCellStyle(pendingApproval?.closedDate !== orgUnit?.closedDate)}>{pendingApproval?.closedDate}</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.lastUpdated?.toISOString() !== orgUnit?.attributeValues[MFR_LAST_UPDATED_ATTRIBUTE_UID])}>MFR last updated</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.lastUpdated?.toISOString() !== orgUnit?.attributeValues[MFR_LAST_UPDATED_ATTRIBUTE_UID])}>{orgUnit?.attributeValues[MFR_LAST_UPDATED_ATTRIBUTE_UID]}</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.lastUpdated?.toISOString() !== orgUnit?.attributeValues[MFR_LAST_UPDATED_ATTRIBUTE_UID])}>{pendingApproval?.lastUpdated?.toISOString()}</DataTableCell>
                             </DataTableRow>
                             <DataTableRow>
-                                <DataTableCell style={getCellStyle(pendingApproval?.yearOpened !== orgUnit?.openingDate)}>Opening date</DataTableCell>
-                                <DataTableCell style={getCellStyle(pendingApproval?.yearOpened !== orgUnit?.openingDate)}>{orgUnit?.openingDate}</DataTableCell>
-                                <DataTableCell style={getCellStyle(pendingApproval?.yearOpened !== orgUnit?.openingDate)}>{pendingApproval?.yearOpened}</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.closedDate !== orgUnit?.closedDate && !(pendingApproval?.closedDate == null && orgUnit?.closedDate == null))}>Closed date</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.closedDate !== orgUnit?.closedDate && !(pendingApproval?.closedDate == null && orgUnit?.closedDate == null))}>{orgUnit?.closedDate}</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.closedDate !== orgUnit?.closedDate && !(pendingApproval?.closedDate == null && orgUnit?.closedDate == null))}>{pendingApproval?.closedDate?.toISOString()}</DataTableCell>
+                            </DataTableRow>
+                            <DataTableRow>
+                                <DataTableCell style={getCellStyle(orgUnit?.openingDate.slice(0, 10) !== pendingApproval?.yearOpened)}>Opening date</DataTableCell>
+                                <DataTableCell style={getCellStyle(orgUnit?.openingDate.slice(0, 10) !== pendingApproval?.yearOpened)}>{orgUnit?.openingDate.slice(0, 10)}</DataTableCell>
+                                <DataTableCell style={getCellStyle(orgUnit?.openingDate.slice(0, 10) !== pendingApproval?.yearOpened)}>{pendingApproval?.yearOpened}</DataTableCell>
                             </DataTableRow>
                             <DataTableRow>
                                 <DataTableCell style={getCellStyle(pendingApproval?.FT !== orgUnit?.attributeValues[MFR_FACILITY_TYPE_ATTRIBUTE_UID])}>Facility type</DataTableCell>
@@ -314,29 +394,43 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                                 <DataTableCell style={getCellStyle(locationOld !== locationNew)} >{locationNew}</DataTableCell>
                             </DataTableRow>
                             <DataTableRow >
-                                <DataTableCell style={getCellStyle(pendingApproval?.isPHCU !== orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID])}>Is PHCU</DataTableCell>
-                                <DataTableCell style={getCellStyle(pendingApproval?.isPHCU !== orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID])}>{orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID]}</DataTableCell>
-                                <DataTableCell style={getCellStyle(pendingApproval?.isPHCU !== orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID])}>{pendingApproval?.isPHCU}</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.isPHCU.toString() !== orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID])}>Is PHCU</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.isPHCU.toString() !== orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID])}>{orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID]}</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.isPHCU.toString() !== orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID])}>{pendingApproval?.isPHCU.toString()}</DataTableCell>
                             </DataTableRow>
                             <DataTableRow >
                                 <DataTableCell style={getCellStyle(newHierarchy !== oldHierarchy)}>Path</DataTableCell>
                                 <DataTableCell style={getCellStyle(newHierarchy !== oldHierarchy)}>{oldHierarchy}</DataTableCell>
                                 <DataTableCell style={getCellStyle(newHierarchy !== oldHierarchy)}>{newHierarchy}</DataTableCell>
                             </DataTableRow>
+                            <DataTableRow>
+                                <DataTableCell >Hierarchy from MFR</DataTableCell>
+                                <DataTableCell></DataTableCell>
+                                <DataTableCell>{pendingApproval.reportingHierarchyName.split("/").slice(1).reverse().join("/")}</DataTableCell>
+                            </DataTableRow>
                         </TableBody>
                     </DataTable>
                     <br />
-                    {errorMessages.map(error => <div>{error} </div>)}
+                    {
+                        errorMessages.length > 0 &&
+                        <>
+                            <div>Errors:</div>
+                            {errorMessages.map(error => <div>{error} </div>)}
+                        </>
+                    }
                     <br />
                     {
-                        //Check sibling here.
-                        warningMessages.map(warning => <div>{warning}</div>)
+                        warningMessages.length > 0 &&
+                        <>
+                            <div>Warnings:</div>
+                            {warningMessages.map(warning => <div>{warning}</div>)}
+                        </>
                     }
 
                 </ModalContent>
                 <ModalActions>
                     <ButtonStrip end>
-                        <Button onClick={() => { onClose() }} >
+                        <Button onClick={() => { onCloseAndRefresh() }} >
                             Cancel
                         </Button>
                         <Button destructive onClick={() =>
@@ -345,7 +439,7 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                             {rejectStatus ? "Un" : ""}Reject
                         </Button>
                         {!rejectStatus &&
-                            < Button primary disabled={errorMessages.length > 0} onClick={() => setApprove(true)} >
+                            < Button primary disabled={errorMessages.length > 0 || (changeType === CHANGE_TYPE_CREATE && !settings?.enableCreation)} onClick={() => setApprove(true)} >
                                 Approve
                             </Button>
                         }

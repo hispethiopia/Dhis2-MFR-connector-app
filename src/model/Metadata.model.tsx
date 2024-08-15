@@ -68,6 +68,7 @@ interface Metadata {
     options: Option[],
     configurations: Configuration[],
     me: {
+        id: string,
         organisationUnits: OrganisationUnitCondensed[],
         username: string,
         userRoles: UserRolesCondensed[]
@@ -85,6 +86,7 @@ const getEmptyMetadata = (): Metadata => {
         userGroups: [],
         userRoles: [],
         me: {
+            id:"",
             organisationUnits: [],
             username: '',
             userRoles: [],
