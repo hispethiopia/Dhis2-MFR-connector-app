@@ -119,7 +119,11 @@ const PendingApprovalsList = () => {
                     approval.reportingHierarchyName = approval.name + "/" + phcuApproval.reportingHierarchyName
 
                     approval.isPHCU = false;
-                    finalList.push(phcuApproval)
+
+                    phcuApproval.closedDate = phcuApproval.operationalStatus === "Closed" || phcuApproval.operationalStatus === "Curently Not Operational" || phcuApproval.operationalStatus === "Suspended" ? phcuApproval.closedDate ? phcuApproval.closedDate : new Date() : null,
+
+
+                        finalList.push(phcuApproval)
                 } else if (approval.isParentPHCU) {
                     //If the parent is a PHCU, we need to check if the parent PHCU is imported not the Health Center(PHCU in MFR)
                     let hierarchyId = approval.reportingHierarchyId.split('/')
@@ -266,7 +270,7 @@ const PendingApprovalsList = () => {
                         refetchPendingApprovals();
                         getRejectedList();
                         setSelectedPendingApproval(null)
-                        
+
                     }}
                     pendingApproval={selectedPendingApproval}
                     rejectStatus={remappedRejectedList[selectedPendingApproval.mfrId + "_" + selectedPendingApproval.lastUpdated?.toISOString()]}

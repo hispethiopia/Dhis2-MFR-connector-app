@@ -130,13 +130,39 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
     const { loading: loadingHealthCenter, error: errorHealthCenter, data: healthCenter } = pendingApproval.healthCenterId ? useDataQuery(getHealthCenterParentDetails, {
         variables: { dhisId: pendingApproval.healthCenterId }
     }) : { loading: null, error: null, data: null }
-    const phcuItem = healthCenter?.organisationUnits.organisationUnits[0]?.parent && healthCenter?.organisationUnits.organisationUnits[0]?.parent.displayName.includes("PHCU") ? healthCenter?.organisationUnits.organisationUnits[0]?.parent : null
+    let phcuItem = null
+
+    if (healthCenter?.organisationUnits.organisationUnits[0]?.parent &&
+        healthCenter?.organisationUnits.organisationUnits[0]?.parent.displayName.includes("PHCU")) {
+        //Now this means that the parent of the health center is found and it is a phcu.
+        let tempPhcu = healthCenter?.organisationUnits.organisationUnits[0]?.parent
+        tempPhcu.attributeValues.forEach(attribute => {
+            tempPhcu.attributeValues[attribute.attribute.id] = attribute.value
+            tempPhcu.attributeValues[attribute.attribute.code] = attribute.value
+        })
+        if ((tempPhcu.attributeValues[MFR_LOCATION_ATTRIBUTE_UID] === ""
+            && tempPhcu.attributeValues[MFR_FACILITY_TYPE_ATTRIBUTE_UID] === "") ||
+            tempPhcu.attributeValues[MFR_LOCATION_ATTRIBUTE_UID] === pendingApproval.mfrId
+        ) {
+            //This means that the PHCU is not already mapped, so this is a new mapping. or
+            //the phcu is already mapped and has the same expected MFR ID.
+            phcuItem = tempPhcu;
+        } else {
+            //If the above doesn't match, then the PHCU is a new PHCU which needs to be created.
+            phcuItem = null;
+        }
+    }
 
     const { loading: loadingOrgUnitWithDhisId, error: errorOrgUnitWithDhisId, data: ouWithDhisIdData } = pendingApproval.dhisId ? useDataQuery(getOrganisationunitWithDhisId, {
         variables: { dhisId: pendingApproval?.dhisId }
     }) : { loading: false, error: null, data: null };
     const ouWithDhisId = ouWithDhisIdData?.organisationUnits.organisationUnits[0]
-
+    if (ouWithDhisId) {
+        ouWithDhisId.attributeValues.forEach(attribute => {
+            ouWithDhisId.attributeValues[attribute.attribute.id] = attribute.value
+            ouWithDhisId.attributeValues[attribute.attribute.code] = attribute.value
+        })
+    }
     const { loading: loadingSettings, error: errorSettings, data: settingsData } = useDataQuery(settingsQuery)
     const settings = settingsData?.settings
 
@@ -196,11 +222,19 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                 errors.push(`DHIS2 id from MFR is not pointing to an existing facility.
                     Dhis2 id from MFR is ${pendingApproval?.dhisId}`)
             }
+            if (orgUnitWithDhisId.attributeValues[MFR_LOCATION_ATTRIBUTE_UID] !== "" &&
+                orgUnitWithDhisId.attributeValues[MFR_LOCATION_ATTRIBUTE_UID] !== pendingApproval.mfrId
+            ) {
+                errors.push(`The MFR id pointed by the dhisObject is different from the pending approval. Please look at MFR id on the fields.`)
+                setOrgUnit(orgUnitWithDhisId)
+            }
+
             if (errors.length === 0 && orgUnitWithMFRId) {
                 setOrgUnit(orgUnitWithMFRId)
             } else if (errors.length === 0 && orgUnitWithDhisId) {
                 setOrgUnit(orgUnitWithDhisId)
             }
+
 
             //Find change type only if there are no errors.
             if (errors.length === 0) {
