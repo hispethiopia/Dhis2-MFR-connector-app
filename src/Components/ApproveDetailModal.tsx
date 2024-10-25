@@ -90,6 +90,19 @@ const uploadRejectedListQuery = {
     data: ({ data }) => data
 }
 
+const deleteApprovalMutation = {
+    type: 'delete',
+    resource: 'dataStore/Dhis2-MFRApproval',
+    id: ({ id }) => id,
+};
+
+const updateRejectedListMutation = {
+    type: 'update',
+    resource: 'dataStore/Dhis2-MFR/rejectedList',
+    data: ({ updatedList }) => updatedList,
+};
+
+
 export const ApproveDetailModal: React.FC<ModalProps> = ({
     pendingApproval, rejectStatus, onClose, onCloseAndRefresh
 }) => {
@@ -114,7 +127,34 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
     const [parentOrgUnit, setParentOrgUnit] = useState<any>(null);
     const [changeType, setChangeType] = useState<ChangeType | null>(null)
     const [approve, setApprove] = useState(false)
-
+    const [deleteApproval] = useDataMutation(deleteApprovalMutation);
+    const [updateRejectedList] = useDataMutation(updateRejectedListMutation);
+    const [isDeleting, setIsDeleting] = React.useState(false);
+    
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        try {
+            const facilityId = pendingApproval.mfrId; 
+            const rejectedListResponse = await getRejectedList(); 
+            const updatedRejectedList = rejectedListResponse.rejectedList || []; 
+            
+            const newRejectedList = updatedRejectedList.filter(entry => {
+                const id = entry.split('_')[0]; 
+                return id !== facilityId; 
+            });
+    
+            await updateRejectedList({ updatedList: newRejectedList });
+    
+            await deleteApproval({ id: facilityId });
+    
+            onCloseAndRefresh();
+    
+        } catch (error) {
+            console.error('Error deleting facility and updating rejected list:', error);
+        } finally {
+            setIsDeleting(false); 
+        }
+    };
     //getFacility and parent.
     let mfrIds = pendingApproval?.reportingHierarchyId.split("/").slice(0, 2);
     //Get DHIS2 orgUnit using the MFR id and the DHIS2 id.
@@ -438,6 +478,11 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                         } >
                             {rejectStatus ? "Un" : ""}Reject
                         </Button>
+                        {rejectStatus && ( 
+                        <Button destructive onClick={handleDelete} disabled={isDeleting}>
+                            Delete
+                        </Button>
+                    )}
                         {!rejectStatus &&
                             < Button primary disabled={errorMessages.length > 0 || (changeType === CHANGE_TYPE_CREATE && !settings?.enableCreation)} onClick={() => setApprove(true)} >
                                 Approve
