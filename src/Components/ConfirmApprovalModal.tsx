@@ -91,9 +91,10 @@ const metadataQuery = {
     },
     users: {
         resource: 'users',
-        params: ({ userIds }) => ({
-            filter: "id:in:[" + userIds + "]",
+        params: ({ userIds, usernames }) => ({
+            filter: ["id:in:[" + userIds + "]", "username:in:[" + usernames + "]"],
             fields: "*",
+            rootJunction: "OR",
             paging: false
         })
     },
@@ -105,7 +106,6 @@ const metadataQuery = {
             paging: false
         })
     }
-
 }
 
 interface MetadataAssignmentProps {
@@ -226,7 +226,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
     })
 
 
-    const getMetadata = async (allChanges: AllChange) => {
+    const getMetadata: any = async (allChanges: AllChange) => {
         setAnyLoading(true)
 
 
@@ -268,6 +268,9 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
         })
 
         try {
+            const usersToCreateUserNames = allChanges.newAssignments.usersToCreate.map(config => {
+                return pendingApproval.mfrCode + config.suffix
+            })
             const response = await metadataRefetch(
                 {
                     userRoleIds: [...new Set(userRoleIds)],
@@ -275,7 +278,8 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
                     userGroupIds: [... new Set(userGroupIds)],
                     dataSetIds: [... new Set(dataSetIds)],
                     categoryOptionIds: [...new Set(categoryOptionIds)],
-                    ougIds: [...new Set(ougIds)]
+                    ougIds: [...new Set(ougIds)],
+                    usernames: [...new Set(usersToCreateUserNames)]
                 }
             );
             let remapped = {};
@@ -377,12 +381,14 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
             metadatasFetched: fetchedObjects.users,
             orgUnitId
         })
-
+        
         allChanges?.changedUsers.forEach(userChange => {
             //These are users that need to be changed their roles and groups.
             let userObject = fetchedObjects.users[userChange.userId]
             userObject.userGroups = userChange.userConfig.userGroups.map(group => { return { 'id': group } })
             userObject.userRoles = userChange.userConfig.userRoles.map(role => { return { "id": role } })
+            userObject.organisationUnits = [{"id":orgUnitId}]
+            userObject.dataViewOrganisationUnits = [{"id":parentOrgUnitId}]
             usersPayload.push(userObject)
         })
 
@@ -492,6 +498,22 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                 [],
                 changeType)
             let tempFetchedData = await getMetadata(allChanges);
+            //For users to create, make sure that the user is not found in the payload first, if it is, push it to the updated.
+            let changeToUpdate: UserConfig[] = []
+            let changedObjects: any[] = []
+            allChanges.newAssignments.usersToCreate.forEach(userConfig => {
+                Object.keys(tempFetchedData.users).forEach(element => {
+                    if (pendingApproval.mfrCode + userConfig.suffix === tempFetchedData.users[element].username) {
+                        changeToUpdate.push(userConfig)
+                        changedObjects.push({ userConfig: userConfig, userId: element, userName: tempFetchedData.users[element].username })
+                    }
+                });
+            })
+
+            allChanges.newAssignments.usersToCreate = allChanges.newAssignments.usersToCreate.filter(userConfig =>
+                !changeToUpdate.includes(userConfig)
+            )
+            allChanges.changedUsers.push(...changedObjects)
             setAllChanges(allChanges)
             setFetchedObjects(tempFetchedData)
             setAnyLoading(false);
@@ -543,7 +565,10 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                 {
                     errorOccured &&
                     <div>
-                        Error saving facility <br /><br />{errorOccured.message}
+                        Error saving facility <br /><br />
+                        Please contact system administrators inorder to approve the facility.<br />
+                        The Facility you wanted approve is {pendingApproval.name}
+
                     </div>
                 }
                 {
