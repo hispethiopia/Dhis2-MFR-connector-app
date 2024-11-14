@@ -120,11 +120,6 @@ const PendingApprovalsList = () => {
 
                     approval.isPHCU = false;
                     finalList.push(phcuApproval);
-
-                    phcuApproval.closedDate = phcuApproval.operationalStatus === "Closed" || phcuApproval.operationalStatus === "Curently Not Operational" || phcuApproval.operationalStatus === "Suspended" ? phcuApproval.closedDate ? phcuApproval.closedDate : new Date() : null,
-
-
-                        finalList.push(phcuApproval)
                 } else if (approval.isParentPHCU) {
                     let hierarchyId = approval.reportingHierarchyId.split('/');
                     hierarchyId[1] = hierarchyId[1] + "_PHCU";
@@ -219,7 +214,9 @@ const PendingApprovalsList = () => {
                                     let rejected = remappedRejectedList[pendingApproval.mfrId + "_" + pendingApproval.lastUpdated?.toISOString()]
 
                                     // Apply filters: rejected list, DHIS ID toggle, and search term
-                                    const matchesDhisId = showWithDhisId ? !!pendingApproval.dhisId : true;
+                                    const matchesDhisId = showWithDhisId 
+                                        ? !!pendingApproval.dhisId || pendingApproval.name.endsWith('_PHCU')
+                                        : true;
                                     const matchesRejected = showRejectedList ? rejected : true;
 
                                     return matchesDhisId && matchesRejected;
@@ -269,8 +266,7 @@ const PendingApprovalsList = () => {
                     onCloseAndRefresh={() => {
                         refetchPendingApprovals();
                         getRejectedList();
-                        setSelectedPendingApproval(null)
-
+                        setSelectedPendingApproval(null);
                     }}
                     pendingApproval={selectedPendingApproval}
                     rejectStatus={remappedRejectedList[selectedPendingApproval.mfrId + "_" + selectedPendingApproval.lastUpdated?.toISOString()]}

@@ -106,6 +106,7 @@ const metadataQuery = {
             paging: false
         })
     }
+
 }
 
 interface MetadataAssignmentProps {
@@ -133,20 +134,57 @@ const maintainAssignment = (props: MetadataAssignmentProps) => {
     return payload;
 }
 
-const createUserPayload = (config: UserConfig, approval: MFRMapped, orgUnitId: string, parentId: string) => {
+const createUserPayload = (
+    config: UserConfig,
+    approval: MFRMapped,
+    orgUnitId: string,
+    parentId: string,
+    previousUserGroups: Array<{ id: string, users: Array<{ id: string }> }>,
+    previousUserRoles: Array<{ id: string, users: Array<{ id: string }> }>
+) => {
+    const userId = generateId(11);
+
+    const updatedUserGroups = previousUserGroups.map(group => ({
+        id: group.id,
+        users: group.users.filter(user => user.id !== userId)
+    }));
+
+    config.userGroups.forEach(newGroupId => {
+        let targetGroup = updatedUserGroups.find(group => group.id === newGroupId);
+        if (!targetGroup) {
+            targetGroup = { id: newGroupId, users: [] };
+            updatedUserGroups.push(targetGroup);
+        }
+        targetGroup.users.push({ id: userId });
+    });
+
+    const updatedUserRoles = previousUserRoles.map(role => ({
+        id: role.id,
+        users: role.users.filter(user => user.id !== userId)
+    }));
+
+    config.userRoles.forEach(newRoleId => {
+        let targetRole = updatedUserRoles.find(role => role.id === newRoleId);
+        if (!targetRole) {
+            targetRole = { id: newRoleId, users: [] };
+            updatedUserRoles.push(targetRole);
+        }
+        targetRole.users.push({ id: userId });
+    });
+
     return {
-        id: generateId(11),
+        id: userId,
         username: approval.mfrCode + config.suffix,
         disabled: false,
-        organisationUnits: [{ "id": orgUnitId }],
-        dataViewOrganisationUnits: [{ "id": parentId }],
-        userRoles: config.userRoles.map(ur => { return { "id": ur } }),
-        userGroups: config.userGroups.map(ug => { return { 'id': ug } }),
+        organisationUnits: [{ id: orgUnitId }],
+        dataViewOrganisationUnits: [{ id: parentId }],
+        userRoles: updatedUserRoles.map(ur => ({ id: ur.id })),  // Ensure format aligns with API expectations
+        userGroups: updatedUserGroups.map(ug => ({ id: ug.id })),
         firstName: approval.hmisCode && approval.hmisCode !== "" ? approval.hmisCode : approval.name,
         surname: config.suffix,
         password: generatePassword()
-    }
-}
+    };
+};
 
 const generateOrgUnitObject = (orgUnitId: string, pendingApproval: MFRMapped, geometry: any, parentId: string) => {
     return {
@@ -226,7 +264,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
     })
 
 
-    const getMetadata: any = async (allChanges: AllChange) => {
+    const getMetadata: any  = async (allChanges: AllChange) => {
         setAnyLoading(true)
 
 
@@ -368,7 +406,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
         let createdUsersPayload: any[] = []
 
         allChanges?.newAssignments.usersToCreate.forEach(uc => {
-            let newUserPayload = createUserPayload(uc, pendingApproval, orgUnitId, parentOrgUnitId)
+            let newUserPayload = createUserPayload(uc, pendingApproval, orgUnitId, parentOrgUnitId,[],[])
             createdUsersPayload.push(newUserPayload)
             usersToCreate.push(...[newUserPayload])
         })
@@ -381,7 +419,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
             metadatasFetched: fetchedObjects.users,
             orgUnitId
         })
-        
+
         allChanges?.changedUsers.forEach(userChange => {
             //These are users that need to be changed their roles and groups.
             let userObject = fetchedObjects.users[userChange.userId]
@@ -498,22 +536,6 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                 [],
                 changeType)
             let tempFetchedData = await getMetadata(allChanges);
-            //For users to create, make sure that the user is not found in the payload first, if it is, push it to the updated.
-            let changeToUpdate: UserConfig[] = []
-            let changedObjects: any[] = []
-            allChanges.newAssignments.usersToCreate.forEach(userConfig => {
-                Object.keys(tempFetchedData.users).forEach(element => {
-                    if (pendingApproval.mfrCode + userConfig.suffix === tempFetchedData.users[element].username) {
-                        changeToUpdate.push(userConfig)
-                        changedObjects.push({ userConfig: userConfig, userId: element, userName: tempFetchedData.users[element].username })
-                    }
-                });
-            })
-
-            allChanges.newAssignments.usersToCreate = allChanges.newAssignments.usersToCreate.filter(userConfig =>
-                !changeToUpdate.includes(userConfig)
-            )
-            allChanges.changedUsers.push(...changedObjects)
             setAllChanges(allChanges)
             setFetchedObjects(tempFetchedData)
             setAnyLoading(false);
@@ -539,6 +561,21 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                 changeType
             )
             const tempFetchedData = await getMetadata(allChanges)
+             //For users to create, make sure that the user is not found in the payload first, if it is, push it to the updated.
+             let changeToUpdate: UserConfig[] = []
+             let changedObjects: any[] = []
+             allChanges.newAssignments.usersToCreate.forEach(userConfig => {
+                 Object.keys(tempFetchedData.users).forEach(element => {
+                     if (pendingApproval.mfrCode + userConfig.suffix === tempFetchedData.users[element].username) {
+                         changeToUpdate.push(userConfig)
+                         changedObjects.push({ userConfig: userConfig, userId: element, userName: tempFetchedData.users[element].username })
+                     }
+                 });
+             })
+             allChanges.newAssignments.usersToCreate = allChanges.newAssignments.usersToCreate.filter(userConfig =>
+                 !changeToUpdate.includes(userConfig)
+             )
+             allChanges.changedUsers.push(...changedObjects)
             setAllChanges(allChanges)
             setFetchedObjects(tempFetchedData)
             setAnyLoading(false);
@@ -567,9 +604,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                     <div>
                         Error saving facility <br /><br />
                         Please contact system administrators inorder to approve the facility.<br />
-                        The Facility you wanted approve is {pendingApproval.name}
-
-                    </div>
+                        The Facility you wanted approve is {pendingApproval.name}                    </div>
                 }
                 {
                     errorOccured === null && finishedSaving === false && fetchedObjects &&
