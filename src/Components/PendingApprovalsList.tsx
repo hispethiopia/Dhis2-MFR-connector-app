@@ -1,7 +1,7 @@
-import React, { useState, useContext, useEffect, useCallback } from 'react'
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { useDataQuery } from '@dhis2/app-runtime';
-import { MetadataContext } from "../App"
-import { MFRMapped } from '../model/MFRMapped.model'
+import { MetadataContext } from "../App";
+import { MFRMapped } from '../model/MFRMapped.model';
 import { MFR_LOCATION_ATTRIBUTE_UID, MFRMapping } from '../functions/constants';
 import { debounce, remapMFR } from '../functions/services';
 import { changeToPHCUName } from '../functions/helpers';
@@ -86,7 +86,8 @@ const PendingApprovalsList = () => {
             remappedRejectedList[item] = true;
         });
     }
-        useEffect(() => {
+
+    useEffect(() => {
         if (allApprovals && getRejectedList) {
             let userOrgUnitsMFRids = metadata.me.organisationUnits.map(orgUnit => orgUnit.attributeValues[MFR_LOCATION_ATTRIBUTE_UID]);
             let mappedApprovals = remapMFR(allApprovals.approvalStatus.entries);
@@ -139,7 +140,6 @@ const PendingApprovalsList = () => {
             setPendingApprovals(appropriateApprovals);
             setFinishedLoading(true);
         }
-
     }, [allApprovals, rejectedList]);
 
     useEffect(() => {
@@ -162,29 +162,24 @@ const PendingApprovalsList = () => {
         setFilterValue(e.target.value);
         handleSearch(e.target.value);
     };
-    
-    
+
     return (
         <div className='container'>
             <h1>Pending Imports</h1>
             {!(rejectedList && allApprovals) && <FullScreenLoader />}
-            
-          
-            <div style={{display:"flex"}}>
-            <Switch
-                checked={showRejectedList}
-                onChange={() => setShowRejectedList(!showRejectedList)}
-                label="Show rejected only"
-            />
 
-            
-            <Switch
-                checked={showWithDhisId}
-                onChange={() => setShowWithDhisId(!showWithDhisId)}
-                label="Show only with DHIS ID"
-            />
+            <div style={{ display: "flex" }}>
+                <Switch
+                    checked={showRejectedList}
+                    onChange={() => setShowRejectedList(!showRejectedList)}
+                    label="Show rejected only"
+                />
+                <Switch
+                    checked={showWithDhisId}
+                    onChange={() => setShowWithDhisId(!showWithDhisId)}
+                    label="Show only with DHIS ID"
+                />
             </div>
-            
 
             <input className='searchbar'
                 type='text'
@@ -211,17 +206,17 @@ const PendingApprovalsList = () => {
                         <TableBody>
                             {
                                 pendingApprovals?.filter(pendingApproval => {
-                                    let rejected = remappedRejectedList[pendingApproval.mfrId + "_" + pendingApproval.lastUpdated?.toISOString()]
+                                    let rejected = remappedRejectedList[pendingApproval.mfrId + "_" + pendingApproval.lastUpdated?.toISOString()];
 
                                     // Apply filters: rejected list, DHIS ID toggle, and search term
-                                    const matchesDhisId = showWithDhisId 
+                                    const matchesDhisId = showWithDhisId
                                         ? !!pendingApproval.dhisId || pendingApproval.name.endsWith('_PHCU')
                                         : true;
-                                    const matchesRejected = showRejectedList ? rejected : true;
+                                    const matchesRejected = showRejectedList ? rejected : !rejected;
 
                                     return matchesDhisId && matchesRejected;
                                 }).map(pendingApproval => {
-                                    let rejected = remappedRejectedList[pendingApproval.mfrId + "_" + pendingApproval.lastUpdated?.toISOString()]
+                                    let rejected = remappedRejectedList[pendingApproval.mfrId + "_" + pendingApproval.lastUpdated?.toISOString()];
                                     return (
                                         <DataTableRow key={pendingApproval.mfrId}>
                                             <DataTableCell>{pendingApproval.name}</DataTableCell>
@@ -243,20 +238,16 @@ const PendingApprovalsList = () => {
                         </TableBody>
                     </DataTable>
                     <Pagination
-                                pageSize={pageSize}
-                                page={pageNumber}
-                                onPageChange={(pageNum) => {
-                                    setPageNumber(pageNum)
-                                }}
-                                pageCount={pendingApprovals && pendingApprovals.length >= pageSize ? pageNumber + 1 : pageNumber}
-                                // hidePageSelect
-                                
-                                onPageSizeChange={(size) => {
-                                    setPageSize(size)
-                                }} 
-                                                      
-                                />
-                                
+                        pageSize={pageSize}
+                        page={pageNumber}
+                        onPageChange={(pageNum) => {
+                            setPageNumber(pageNum);
+                        }}
+                        pageCount={pendingApprovals && pendingApprovals.length >= pageSize ? pageNumber + 1 : pageNumber}
+                        onPageSizeChange={(size) => {
+                            setPageSize(size);
+                        }}
+                    />
                 </>
             )}
 
@@ -273,7 +264,7 @@ const PendingApprovalsList = () => {
                 />
             )}
         </div>
-    )
-}
+    );
+};
 
-export default PendingApprovalsList
+export default PendingApprovalsList;
