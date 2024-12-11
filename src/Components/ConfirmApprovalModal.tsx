@@ -425,8 +425,8 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
             let userObject = fetchedObjects.users[userChange.userId]
             userObject.userGroups = userChange.userConfig.userGroups.map(group => { return { 'id': group } })
             userObject.userRoles = userChange.userConfig.userRoles.map(role => { return { "id": role } })
-            userObject.organisationUnits = [{"id":orgUnitId}]
-            userObject.dataViewOrganisationUnits = [{"id":parentOrgUnitId}]
+            userObject.organisationUnits = [{ "id":orgUnitId }]
+            userObject.dataViewOrganisationUnits = [{ "id":parentOrgUnitId }]
             usersPayload.push(userObject)
         })
 
@@ -434,7 +434,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
         let usersToUnassign = unassignedUsers.filter(user => user.organisationUnits.length !== 0)
 
         usersToDisable.forEach(user => {
-            user.disable = true;
+            user.disabled = true;
         })
 
         usersPayload.push(...usersToDisable)
@@ -536,6 +536,22 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                 [],
                 changeType)
             let tempFetchedData = await getMetadata(allChanges);
+            //look for the users to be created and check if they are already existing. 
+            // allChanges.newAssignments.usersToCreate.forEach(user=>{
+            //     console.log(tempFetchedData);
+            // })
+            
+            let allUserNamesFetched = Object.keys(tempFetchedData.users).map(uid => tempFetchedData.users[uid].username)
+            allChanges.newAssignments.usersToCreate = allChanges.newAssignments.usersToCreate.filter(userConfiguration => {
+                const userIndex = allUserNamesFetched.indexOf(existingDhisObject.code + userConfiguration.suffix)
+                if ( userIndex !== -1){
+                    let userObject = tempFetchedData.users[Object.keys(tempFetchedData.users)[userIndex]]
+                    allChanges.changedUsers.push({userConfig: userConfiguration,userId: userObject.id, userName: userObject.username})
+                    return false;
+                }else {
+                    return true
+                }
+            })
             setAllChanges(allChanges)
             setFetchedObjects(tempFetchedData)
             setAnyLoading(false);
