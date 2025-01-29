@@ -886,8 +886,8 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Users to disable: {
                                             allChanges?.unassigns.users
-                                                .map(user => fetchedObjects.users[user.id].userName)
-                                                .map(name => <>{name}<br /></>)
+                                                .map(user => fetchedObjects.users[user.id].username)
+                                                
                                         }
                                     </div>
                                 }
