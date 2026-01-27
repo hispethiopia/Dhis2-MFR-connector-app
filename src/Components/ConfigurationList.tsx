@@ -9,7 +9,7 @@ const query = {
     configurations: {
         resource: 'dataStore/Dhis2-MFR',
         params: {
-            fields: 'name,Key',
+            fields: 'name,key',
             paging: false,
         },
     },
@@ -34,8 +34,8 @@ const ConfigurationList = () => {
     const errorAlert = useAlert('Failed to delete configuration', { critical: true })
 
     const { loading, error, data, refetch, called } = useDataQuery(query)
-    let configs = data ? data.configurations as ConfigurationCondensed[] : []
-
+    const configs: ConfigurationCondensed[] = data?.configurations?.entries || [];
+    console.log("here are the configs", configs);
     return (
         <div>
             <div className='container'>

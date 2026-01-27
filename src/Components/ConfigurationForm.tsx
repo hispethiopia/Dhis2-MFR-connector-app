@@ -79,9 +79,12 @@ const ConfigurationForm: React.FC = () => {
          */
         lazy: true
     })
-    if (Key && !called) {
-        refetch(Key)
-    }
+    useEffect(() => {
+        if (Key && !called) {
+            refetch(Key)
+        }
+    }, [Key, called, refetch])
+    
 
     function debounce(fn, delay) {
         let timeoutId;
@@ -117,7 +120,8 @@ const ConfigurationForm: React.FC = () => {
         if (!foundFieldNotEntered) {
 
             //make sure that the id is the same and not empty
-            metadata.configurations.filter(item => item.key != configuration.key)
+            Object.values(metadata.configurations || {})
+            .filter(item => item.key != configuration.key)
                 .forEach(config => {
                     //Check if name is unique in all configurations.
                     if (config.name === configuration.name) {
@@ -127,8 +131,11 @@ const ConfigurationForm: React.FC = () => {
                     }
                     //check if all options do match with any other configuration.
                     let res = metadata.optionSets.every(option => {
-                        return configuration.optionSets[option.code] === config.optionSets[option.code];
-                    })
+                        return (
+                           configuration.optionSets?.[option.code] ===
+                           (config.optionSets || {})[option.code]
+                        );
+                     });
                     if (res) {
                         tempError.errorSummary = true;
                         tempError.messageSummary = "Make sure that configuration is unique"
