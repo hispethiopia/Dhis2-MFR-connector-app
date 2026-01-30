@@ -168,7 +168,15 @@ const ConfigurationForm: React.FC = () => {
 
     useEffect(() => {
         if (dataConfig && called) {
-            setConfigurationObject(dataConfig.configuration)
+            setConfigurationObject({
+                ...initializeConfigs,
+                ...dataConfig.configuration,
+                userConfigs: dataConfig.configuration?.userConfigs || [],
+                optionSets: dataConfig.configuration?.optionSets || {},
+                orgUnitGroups: dataConfig.configuration?.orgUnitGroups || [],
+                dataSets: dataConfig.configuration?.dataSets || [],
+                categoryOptionCombos: dataConfig.configuration?.categoryOptionCombos || []
+              })
         }
     }, [dataConfig]);
 
