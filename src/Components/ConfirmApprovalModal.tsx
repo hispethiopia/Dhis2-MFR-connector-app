@@ -721,7 +721,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     {(allChanges?.unassigns.dataSets.length ?? 0)}
                                 </DataTableCell>
                                 </DataTableRow>
-                                <DataTableRow>
+                                <DataTableRow
                                 expandableContent={
                                     <div>
                                         Programs to assign: {
@@ -733,6 +733,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                 }
                                 expanded={expanded === "programsAssign"}
                                 onExpandToggle={() => expanded !== "programsAssign" ? setExpanded("programsAssign") : setExpanded('')}
+                                >
                                 <DataTableCell>
                                     Programs
                                 </DataTableCell>
@@ -744,7 +745,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                 </DataTableCell>
                                 
                                 </DataTableRow>
-                                <DataTableRow>
+                                <DataTableRow
                                 expandableContent={
                                     <div>
                                         Programs to unassign: {
@@ -756,6 +757,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                 }  
                                 expanded={expanded === "programsUnAssign"}  
                                 onExpandToggle={() => expanded !== "programsUnAssign" ? setExpanded("programsUnAssign") : setExpanded('')}
+                                >
                                 <DataTableCell>
                                     Programs
                                 </DataTableCell>
@@ -766,7 +768,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     {(allChanges?.unassigns.programs.length ?? 0)}
                                 </DataTableCell>
                                 </DataTableRow>
-                                <DataTableRow>
+                                <DataTableRow
                                 expandableContent={
                                     <div>
                                         Programs Unchanged: {
@@ -778,6 +780,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                 }
                                 expanded={expanded === "programsUnChanged"}
                                 onExpandToggle={() => expanded !== "programsUnChanged" ? setExpanded("programsUnChanged") : setExpanded('')}
+                                >
                                 <DataTableCell>
                                     Programs
                                 </DataTableCell>

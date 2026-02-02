@@ -102,18 +102,21 @@ export const remapMFR = (mfrObjects: any[]): MFRMapped[] => {
     })
 }
 
-export const getChanges = (mfrObject: MFRMapped,
+export const getChanges = (
+    mfrObject: MFRMapped,
     existingOrgUnit: any,
     allConfigurations: Configuration[],
     assignedCategoryOptions: CategoryOption[],
     changeType: ChangeType
 ): AllChange => {
+    console.log("the org units" , existingOrgUnit);
+
     let newMapping = false;
     if (existingOrgUnit === null && mfrObject.dhisId) {
         newMapping = true;
     }
 
-    const applicableConfigurations = getApplicableConfigurations(allConfigurations, mfrObject);
+    const applicableConfigurations = getApplicableConfigurations(allConfigurations, mfrObject) || [];
 
     let dataSetsToBeAssigned: string[] = []
     let programsToBeAssigned: string[] = []
@@ -121,12 +124,12 @@ export const getChanges = (mfrObject: MFRMapped,
     let catCombosToBeAssigned: string[] = []
     let userConfigsToBeAssigned: UserConfig[] = []
 
-    applicableConfigurations.forEach(conf => {
-        catCombosToBeAssigned.push(...conf.categoryOptionCombos)
-        dataSetsToBeAssigned.push(...conf.dataSets)
-        programsToBeAssigned.push(...conf.programs)
-        ougsToBeAssigned.push(...conf.orgUnitGroups)
-        userConfigsToBeAssigned.push(...conf.userConfigs)
+    Array.isArray(applicableConfigurations) && applicableConfigurations.forEach(conf => {
+        catCombosToBeAssigned.push(...(conf.categoryOptionCombos || []))
+        dataSetsToBeAssigned.push(...(conf.dataSets || []))
+        programsToBeAssigned.push(...(conf.programs || []))
+        ougsToBeAssigned.push(...(conf.orgUnitGroups || []))
+        userConfigsToBeAssigned.push(...(conf.userConfigs || []))
     })
 
     //This is the objects to unassign from existing orgUnit, if the orgUnit exists already.
@@ -147,21 +150,21 @@ export const getChanges = (mfrObject: MFRMapped,
     let changedUsers: UserChange[] = [];
 
     if (existingOrgUnit) {
-        existingOrgUnit.dataSets.forEach((ds: DataSet) => {
+        Array.isArray(existingOrgUnit?.dataSets) && (existingOrgUnit?.dataSets || []).forEach((ds: DataSet) => {
             if (!dataSetsToBeAssigned.includes(ds.id)) {
                 unasignedObjects.dataSets.push(ds.id)
             } else {
                 unChangedObjects.dataSets.push(ds.id)
             }
         })
-        existingOrgUnit.programs.forEach((program: Program) => {
+        Array.isArray(existingOrgUnit?.programs)&&(existingOrgUnit?.programs || []).forEach((program: Program) => {
             if (!programsToBeAssigned.includes(program.id)) {
                 unasignedObjects.programs.push(program.id)
             } else {
                 unChangedObjects.programs.push(program.id)
             }
         })
-        existingOrgUnit.organisationUnitGroups.forEach((orgUnitGroup: OrganisationUnitGroup) => {
+        Array.isArray(existingOrgUnit?.organisationUnitGroups)&&(existingOrgUnit?.organisationUnitGroups || []).forEach((orgUnitGroup: OrganisationUnitGroup) => {
             if (!ougsToBeAssigned.includes(orgUnitGroup.id)) {
                 unasignedObjects.organisationUnitGroups.push(orgUnitGroup.id)
             } else {
@@ -169,7 +172,7 @@ export const getChanges = (mfrObject: MFRMapped,
             }
         })
 
-        assignedCategoryOptions.forEach(co => {
+        Array.isArray(assignedCategoryOptions) && (assignedCategoryOptions ?? []).forEach(co => {
             if (!catCombosToBeAssigned.includes(co.id)) {
                 unasignedObjects.categoryOptions.push(co.id)
             } else {
@@ -177,7 +180,7 @@ export const getChanges = (mfrObject: MFRMapped,
             }
         })
 
-        existingOrgUnit.users.forEach((user: User) => {
+        Array.isArray(existingOrgUnit?.users) && (existingOrgUnit?.users || [] ).forEach((user: User) => {
             //Find the configuration for this user.
             let configurationFound = false;
             userConfigsToBeAssigned.forEach(userConfig => {
@@ -249,12 +252,12 @@ export const findMatchingNames = (stringToFind: string | undefined, stringList: 
 }
 
 export const remapAttributeValues = (objects) => {
-    objects.forEach(obj => {
-        obj.attributeValues.forEach(attVal => {
-            if (attVal.attribute.id) {
+    (Array.isArray(objects) ? objects : []).forEach(obj => {
+        (obj.attributeValues ?? []).forEach(attVal => {
+            if (attVal?.attribute?.id) {
                 obj.attributeValues[attVal.attribute.id] = attVal.value
             }
-            if (attVal.attribute.code) {
+            if (attVal?.attribute?.code) {
                 obj.attributeValues[attVal.attribute.code] = attVal.value
             }
         })
@@ -266,25 +269,45 @@ export const getApplicableConfigurations = (
     approvedObject: MFRMapped | Object,
     bulk: boolean = false,
 ) => {
+
+    const safeConfigs = Array.isArray(allConfigurations)
+        ? allConfigurations
+        : [];
+
     let applicableConfigurations: Configuration[] = [];
-    allConfigurations.forEach(config => {
-        let different = Object.keys(config.optionSets).some(option => {
-            //If there is one option that doesn't satisfy then ignore that configuration.
-            if (config.optionSets[option] !== (!bulk ? approvedObject[option]?.toString() : "")) {
-                return true;
-            }
-        })
+
+    safeConfigs.forEach(config => {
+
+        const optionSets = config.optionSets || {};
+
+        let different = Object.keys(optionSets).some(option => {
+            const approvedValue = !bulk
+                ? approvedObject?.[option]?.toString()
+                : "";
+            console.log("CONFIG OPTION SETS:", optionSets);
+            return optionSets[option] !== approvedValue;
+        });
+
         if (!different) {
-            //If all options meet the criteria then consider that configuration.
-            applicableConfigurations.push(config)
+            applicableConfigurations.push(config);
         }
     });
+    console.log("MFR OBJECT:", approvedObject);
 
-    return applicableConfigurations
+    console.log("applicableConfigurations", applicableConfigurations.length);
+
+    return applicableConfigurations;
 }
+// export const remapUsingId = (objects) => {
+//     objects.forEach(obj => {
+//         objects[obj.id] = obj
+//     });
+// }
 
 export const remapUsingId = (objects) => {
-    objects.forEach(obj => {
-        objects[obj.id] = obj
+    const map = {};
+    (Array.isArray(objects) ? objects : []).forEach(obj => {
+        map[obj.id] = obj;
     });
+    return map;
 }
