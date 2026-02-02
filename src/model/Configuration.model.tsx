@@ -1,3 +1,5 @@
+import { Program } from "@hisptz/dhis2-utils";
+
 export interface UserConfig {
     suffix: string;
     userRoles: string[],
@@ -26,6 +28,10 @@ export interface Configuration {
      */
     dataSets: string[],
     /**
+     * This holds the programs selected for the configuration
+     */
+    programs: string[],
+    /**
      * This holds the categoryOptionCombos of the configuration [OPD1,IPD2...]
      */
     categoryOptionCombos: string[],
@@ -36,7 +42,9 @@ export interface Configuration {
      * 
      * }
      */
-    userConfigs: UserConfig[]
+    userConfigs: UserConfig[],
+   
+  
 }
 
 export interface ConfigurationCondensed {

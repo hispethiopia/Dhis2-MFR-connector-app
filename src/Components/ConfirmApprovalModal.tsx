@@ -81,6 +81,14 @@ const metadataQuery = {
             paging: false
         })
     },
+    programs: {
+        resource: 'programs',
+        params: ({ programIds }) => ({
+            filter: "id:in:[" + programIds + "]",
+            fields: "*",
+            paging: false
+        })
+    },
     userGroups: {
         resource: 'userGroups',
         params: ({ userGroupIds }) => ({
@@ -272,7 +280,12 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
         dataSetIds.push(...allChanges?.newAssignments.dataSetsToAssign)
         dataSetIds.push(...allChanges.unassigns.dataSets)
         dataSetIds.push(...allChanges.unChangedAssignments.dataSets)
-
+        
+        let programIds: string[] = []
+        programIds.push(...allChanges?.newAssignments.programsToAssign)
+        programIds.push(...allChanges.unassigns.programs)
+        programIds.push(...allChanges.unChangedAssignments.programs)
+        
         let ougIds: string[] = []
         ougIds.push(...allChanges.newAssignments.ougToAssign)
         ougIds.push(...allChanges.unassigns.oug)
@@ -315,6 +328,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
                     userIds: [...new Set(userIds)],
                     userGroupIds: [... new Set(userGroupIds)],
                     dataSetIds: [... new Set(dataSetIds)],
+                    programIds: [... new Set(programIds)],
                     categoryOptionIds: [...new Set(categoryOptionIds)],
                     ougIds: [...new Set(ougIds)],
                     usernames: [...new Set(usersToCreateUserNames)]
@@ -355,6 +369,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
         let orgUnitCode = pendingApproval.mfrCode
 
         let dataSetPayload: any[] = [];
+        let programPayload: any[] = [];
         let categoryOptionsPayload: any[] = [];
         let usersPayload: any[] = [];
         let orgUnitGroupsPayload: any[] = [];
@@ -373,7 +388,18 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
             metadatasFetched: fetchedObjects.dataSets,
             orgUnitId
         }))
-
+        programPayload.push(...maintainAssignment({
+            assignmentType: "assign",
+            metadataIds: allChanges?.newAssignments.programsToAssign ?? [],
+            metadatasFetched: fetchedObjects.programs,
+            orgUnitId
+        }))
+        programPayload.push(...maintainAssignment({
+            assignmentType: "Unassign",
+            metadataIds: allChanges?.unassigns.programs ?? [],
+            metadatasFetched: fetchedObjects.programs,
+            orgUnitId
+        }))
         categoryOptionsPayload.push(...maintainAssignment({
             assignmentType: "assign",
             metadataIds: allChanges?.newAssignments.cocToAssign ?? [],
@@ -453,6 +479,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
             let metaObjects: any = {
                 users: usersPayload,
                 dataSets: dataSetPayload,
+                programs: programPayload,
                 categoryOptions: categoryOptionsPayload,
                 organisationUnitGroups: orgUnitGroupsPayload,
             }
@@ -692,6 +719,73 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                 </DataTableCell>
                                 <DataTableCell>
                                     {(allChanges?.unassigns.dataSets.length ?? 0)}
+                                </DataTableCell>
+                                </DataTableRow>
+                                <DataTableRow>
+                                expandableContent={
+                                    <div>
+                                        Programs to assign: {
+                                            allChanges?.newAssignments.programsToAssign
+                                                .map(pr => fetchedObjects.programs[pr].displayName)
+                                                .map(name => <>{name}<br /></>)
+                                        }
+                                    </div>
+                                }
+                                expanded={expanded === "programsAssign"}
+                                onExpandToggle={() => expanded !== "programsAssign" ? setExpanded("programsAssign") : setExpanded('')}
+                                <DataTableCell>
+                                    Programs
+                                </DataTableCell>
+                                <DataTableCell>
+                                    Assign
+                                </DataTableCell>
+                                <DataTableCell>
+                                    {(allChanges?.newAssignments.programsToAssign.length ?? 0)}    
+                                </DataTableCell>
+                                
+                                </DataTableRow>
+                                <DataTableRow>
+                                expandableContent={
+                                    <div>
+                                        Programs to unassign: {
+                                            allChanges?.unassigns.programs
+                                                .map(pr => fetchedObjects.programs[pr].displayName)
+                                                .map(name => <>{name}<br /></>)
+                                        }
+                                    </div>
+                                }  
+                                expanded={expanded === "programsUnAssign"}  
+                                onExpandToggle={() => expanded !== "programsUnAssign" ? setExpanded("programsUnAssign") : setExpanded('')}
+                                <DataTableCell>
+                                    Programs
+                                </DataTableCell>
+                                <DataTableCell>
+                                    UnAssign   
+                                </DataTableCell>
+                                <DataTableCell>
+                                    {(allChanges?.unassigns.programs.length ?? 0)}
+                                </DataTableCell>
+                                </DataTableRow>
+                                <DataTableRow>
+                                expandableContent={
+                                    <div>
+                                        Programs Unchanged: {
+                                            allChanges?.unChangedAssignments.programs
+                                                .map(pr => fetchedObjects.programs[pr].displayName)
+                                                .map(name => <>{name}<br /></>)
+                                        }
+                                    </div>
+                                }
+                                expanded={expanded === "programsUnChanged"}
+                                onExpandToggle={() => expanded !== "programsUnChanged" ? setExpanded("programsUnChanged") : setExpanded('')}
+                                <DataTableCell>
+                                    Programs
+                                </DataTableCell>
+                                <DataTableCell>
+                                    UnChanged
+                                </DataTableCell>
+                                <DataTableCell>
+                                    {(allChanges?.unChangedAssignments.programs.length ?? 0)}
                                 </DataTableCell>
                             </DataTableRow>
                             <DataTableRow

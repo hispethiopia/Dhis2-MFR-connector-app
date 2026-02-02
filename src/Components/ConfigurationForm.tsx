@@ -31,6 +31,7 @@ const initializeConfigs: Configuration = {
     optionSets: [],
     orgUnitGroups: [],
     dataSets: [],
+    programs: [],
     categoryOptionCombos: [],
     userConfigs: [],
     key: ""
@@ -175,6 +176,7 @@ const ConfigurationForm: React.FC = () => {
                 optionSets: dataConfig.configuration?.optionSets || {},
                 orgUnitGroups: dataConfig.configuration?.orgUnitGroups || [],
                 dataSets: dataConfig.configuration?.dataSets || [],
+                programs: dataConfig.configuration?.programs || [],
                 categoryOptionCombos: dataConfig.configuration?.categoryOptionCombos || []
               })
         }
@@ -304,6 +306,24 @@ const ConfigurationForm: React.FC = () => {
                                 />
                             </>
                         }
+                        { metadata.programs?.length > 0 && <>
+                                <br />
+                                Programs
+                                <Transfer
+                                    filterable
+                                    options={metadata.programs.map(p => ({
+                                        label: p.displayName,
+                                        value: p.id
+                                    }))}
+                                    selected={configurationObject.programs}
+                                    onChange={(e) => {
+                                        setConfigurationField({
+                                            field: 'programs',
+                                            value: e.selected
+                                        })
+                                    }}
+                                />
+                            </>}
                         {
                             metadata.categoryOptions.length > 0 &&
                             <>

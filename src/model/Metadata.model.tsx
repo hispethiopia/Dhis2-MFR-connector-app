@@ -16,6 +16,10 @@ interface DataSet {
     id: string,
     displayName: string,
 }
+interface Program {
+    id: string,
+    displayName: string,
+}
 
 interface UserGroup {
     id: string,
@@ -66,6 +70,7 @@ interface Metadata {
     categoryOptions: CategoryOption[],
     optionSets: OptionSet[],
     options: Option[],
+    programs: Program[],
     configurations: Configuration[],
     me: {
         id: string,
@@ -81,6 +86,7 @@ const getEmptyMetadata = (): Metadata => {
         configurations: [],
         organisationUnitGroups: [],
         dataSets: [],
+        programs: [],
         options: [],
         optionSets: [],
         userGroups: [],
@@ -98,6 +104,7 @@ export {
     AttributeValue,
     OrganisationUnitGroup,
     DataSet,
+    Program,
     UserGroup,
     UserRole,
     CategoryOption,

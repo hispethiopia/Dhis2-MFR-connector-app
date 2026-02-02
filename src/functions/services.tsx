@@ -1,6 +1,6 @@
 import { AffectedValues, AllChange, ChangeType, User, UserChange } from "../model/Approvals.model";
 import { Configuration, UserConfig } from "../model/Configuration.model";
-import { CategoryOption, DataSet, OrganisationUnitGroup } from "../model/Metadata.model";
+import { CategoryOption, DataSet, Program, OrganisationUnitGroup } from "../model/Metadata.model";
 import { MFRMapped } from "../model/MFRMapped.model";
 import stringSimilarity from 'string-similarity'
 import { CHANGE_TYPE_CREATE, CHANGE_TYPE_NEW_MAPPING, CHANGE_TYPE_UPDATE } from "./constants";
@@ -116,6 +116,7 @@ export const getChanges = (mfrObject: MFRMapped,
     const applicableConfigurations = getApplicableConfigurations(allConfigurations, mfrObject);
 
     let dataSetsToBeAssigned: string[] = []
+    let programsToBeAssigned: string[] = []
     let ougsToBeAssigned: string[] = []
     let catCombosToBeAssigned: string[] = []
     let userConfigsToBeAssigned: UserConfig[] = []
@@ -123,6 +124,7 @@ export const getChanges = (mfrObject: MFRMapped,
     applicableConfigurations.forEach(conf => {
         catCombosToBeAssigned.push(...conf.categoryOptionCombos)
         dataSetsToBeAssigned.push(...conf.dataSets)
+        programsToBeAssigned.push(...conf.programs)
         ougsToBeAssigned.push(...conf.orgUnitGroups)
         userConfigsToBeAssigned.push(...conf.userConfigs)
     })
@@ -130,12 +132,14 @@ export const getChanges = (mfrObject: MFRMapped,
     //This is the objects to unassign from existing orgUnit, if the orgUnit exists already.
     let unasignedObjects: AffectedValues = {
         dataSets: [],
+        programs: [],
         categoryOptions: [],
         users: [],
         organisationUnitGroups: []
     }
     let unChangedObjects: AffectedValues = {
         dataSets: [],
+        programs: [],
         categoryOptions: [],
         users: [],
         organisationUnitGroups: []
@@ -148,6 +152,13 @@ export const getChanges = (mfrObject: MFRMapped,
                 unasignedObjects.dataSets.push(ds.id)
             } else {
                 unChangedObjects.dataSets.push(ds.id)
+            }
+        })
+        existingOrgUnit.programs.forEach((program: Program) => {
+            if (!programsToBeAssigned.includes(program.id)) {
+                unasignedObjects.programs.push(program.id)
+            } else {
+                unChangedObjects.programs.push(program.id)
             }
         })
         existingOrgUnit.organisationUnitGroups.forEach((orgUnitGroup: OrganisationUnitGroup) => {
@@ -199,6 +210,7 @@ export const getChanges = (mfrObject: MFRMapped,
     let allChange: AllChange = {
         newAssignments: {
             dataSetsToAssign: dataSetsToBeAssigned.filter(ds => !unChangedObjects.dataSets.includes(ds)),
+            programsToAssign: programsToBeAssigned.filter(pr => !unChangedObjects.programs.includes(pr)),
             cocToAssign: catCombosToBeAssigned.filter(co => !unChangedObjects.categoryOptions.includes(co)),
             ougToAssign: ougsToBeAssigned.filter(oug => !unChangedObjects.organisationUnitGroups.includes(oug)),
             usersToCreate: usersToCreate
@@ -206,12 +218,14 @@ export const getChanges = (mfrObject: MFRMapped,
         unassigns: {
             coc: unasignedObjects.categoryOptions,
             dataSets: unasignedObjects.dataSets,
+            programs: unasignedObjects.programs,
             oug: unasignedObjects.organisationUnitGroups,
             users: unasignedObjects.users
         },
         unChangedAssignments: {
             coc: unChangedObjects.categoryOptions,
             dataSets: unChangedObjects.dataSets,
+            programs: unChangedObjects.programs,
             oug: unChangedObjects.organisationUnitGroups,
             users: []
         },

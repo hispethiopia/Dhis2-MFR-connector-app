@@ -31,6 +31,13 @@ const query = {
             paging: false
         }
     },
+    programs:{
+        resource: 'programs',
+        params: {
+            fields: 'id,displayName',
+            paging: false
+        }
+    },
     userGroups: {
         resource: 'userGroups',
         params: {
@@ -70,6 +77,7 @@ export const fetchMetadataHook = () => {
     if (data) {
         metadata.organisationUnitGroups = data.organisationUnitGroups?.organisationUnitGroups || []
         metadata.dataSets = data.dataSets?.dataSets || []
+        metadata.programs = data.programs?.programs || []
         metadata.userRoles = data.userRoles?.userRoles || []
         metadata.userGroups = data.userGroups?.userGroups || []
         metadata.categoryOptions = data.categoryOptions?.categoryOptions || []

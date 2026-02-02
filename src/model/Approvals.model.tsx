@@ -1,6 +1,6 @@
 import { CHANGE_TYPE_CREATE, CHANGE_TYPE_DELETE, CHANGE_TYPE_DISABLE, CHANGE_TYPE_NEW_MAPPING, CHANGE_TYPE_UPDATE } from "../functions/constants";
 import { UserConfig } from "./Configuration.model";
-import { CategoryOption, DataSet, OrganisationUnitGroup, UserGroup, UserRole } from "./Metadata.model";
+import { CategoryOption, DataSet,Program, OrganisationUnitGroup, UserGroup, UserRole } from "./Metadata.model";
 
 interface User {
     userRoles: UserRole[],
@@ -14,6 +14,7 @@ interface User {
 
 interface AffectedValues {
     dataSets: string[],
+    programs: string[],
     categoryOptions: string[],
     organisationUnitGroups: string[],
     users: User[],
@@ -45,18 +46,21 @@ type ChangeType = typeof CHANGE_TYPE_CREATE | typeof CHANGE_TYPE_DISABLE | typeo
 interface AllChange {
     newAssignments: {
         dataSetsToAssign: string[],
+        programsToAssign: string[],
         cocToAssign: string[],
         ougToAssign: string[],
         usersToCreate: UserConfig[],
     },
     unChangedAssignments: {
         dataSets: string[],
+        programs: string[],
         coc: string[]
         oug: string[],
         users: User[],
     },
     unassigns: {
         dataSets: string[],
+        programs: string[],
         coc: string[]
         oug: string[],
         users: User[],
