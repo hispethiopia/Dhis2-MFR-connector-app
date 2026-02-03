@@ -62,7 +62,7 @@ const query = {
     configurations: {
         resource: 'dataStore/Dhis2-MFR',
         params: {
-            fields: 'key,name,optionSets,orgUnitGroups,dataSets,categoryOptionCombos,userConfigs',
+            fields: 'key,name,optionSets,orgUnitGroups,dataSets,programs,categoryOptionCombos,userConfigs',
             paging: false,
         },
     },

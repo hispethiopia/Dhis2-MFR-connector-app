@@ -115,9 +115,9 @@ export const getChanges = (
     if (existingOrgUnit === null && mfrObject.dhisId) {
         newMapping = true;
     }
-
+    
     const applicableConfigurations = getApplicableConfigurations(allConfigurations, mfrObject) || [];
-
+    console.log("applicableConfigurations & mfrobject", applicableConfigurations.length, mfrObject);
     let dataSetsToBeAssigned: string[] = []
     let programsToBeAssigned: string[] = []
     let ougsToBeAssigned: string[] = []
@@ -264,40 +264,99 @@ export const remapAttributeValues = (objects) => {
     });
 }
 
+// export const getApplicableConfigurations = (
+//     allConfigurations: Configuration[],
+//     approvedObject: MFRMapped | Object,
+//     bulk: boolean = false,
+// ) => {
+//     console.log("All CONFIGURATIONS:", allConfigurations);
+//     const safeConfigs = Array.isArray(allConfigurations)
+//         ? allConfigurations
+//         : allConfigurations?.[];
+
+//     let applicableConfigurations: Configuration[] = [];
+//     console.log("inside",safeConfigs)
+//     safeConfigs.forEach(config => {
+//         if (bulk) {
+//             applicableConfigurations.push(config);
+//             return;
+//          }
+//         const optionSets = config.optionSets || {};
+//         console.log("CONFIG OPTION SETS:", optionSets)
+
+//         let different = Object.keys(optionSets).some(option => {
+//             const approvedValue = !bulk
+//                 ? String(approvedObject?.[option] ?? "")
+//                 : "";
+//             const configValue = String(optionSets[option] ?? "");
+//             console.log("COMPARE:", option, optionSets[option], approvedObject?.[option]);
+
+//             return configValue !== approvedValue;
+
+//         });
+
+
+//         if (!different) {
+//             applicableConfigurations.push(config);
+//         }
+        
+//     });
+//     // console.log("MFR OBJECT:", approvedObject);
+
+//     // console.log("applicableConfigurations", applicableConfigurations.length);
+
+//     return applicableConfigurations;
+// }
+
 export const getApplicableConfigurations = (
-    allConfigurations: Configuration[],
+    allConfigurations: any,              // can be array OR { entries: [] }
     approvedObject: MFRMapped | Object,
     bulk: boolean = false,
-) => {
-
-    const safeConfigs = Array.isArray(allConfigurations)
-        ? allConfigurations
-        : [];
-
-    let applicableConfigurations: Configuration[] = [];
-
-    safeConfigs.forEach(config => {
-
-        const optionSets = config.optionSets || {};
-
-        let different = Object.keys(optionSets).some(option => {
-            const approvedValue = !bulk
-                ? approvedObject?.[option]?.toString()
-                : "";
-            console.log("CONFIG OPTION SETS:", optionSets);
-            return optionSets[option] !== approvedValue;
-        });
-
-        if (!different) {
-            applicableConfigurations.push(config);
-        }
+  ): Configuration[] => {
+  
+    // Accept either array or paged response
+    const safeConfigs: Configuration[] = Array.isArray(allConfigurations)
+      ? allConfigurations
+      : allConfigurations?.entries ?? [];
+  
+    // If nothing to filter
+    if (!safeConfigs.length) {
+      console.warn("No configurations supplied");
+      return [];
+    }
+  
+    const applicableConfigurations: Configuration[] = [];
+    
+    safeConfigs.forEach((config) => {
+  
+      // Bulk = accept everything
+      if (bulk) {
+        applicableConfigurations.push(config);
+        return;
+      }
+      console.log("appicable conf",applicableConfigurations)
+      const optionSets = config.optionSets || {};
+  
+      // Check if ANY option differs
+      const isDifferent = Object.keys(optionSets).some((option) => {
+  
+        const configValue = String(optionSets[option] ?? "").trim();
+        const approvedValue = String(approvedObject?.[option] ?? "").trim();
+  
+        return configValue !== approvedValue;
+      });
+  
+      // If none differ → applicable
+      if (!isDifferent) {
+        applicableConfigurations.push(config);
+      }
     });
-    console.log("MFR OBJECT:", approvedObject);
-
-    console.log("applicableConfigurations", applicableConfigurations.length);
-
+  
     return applicableConfigurations;
-}
+  };
+  
+
+
 // export const remapUsingId = (objects) => {
 //     objects.forEach(obj => {
 //         objects[obj.id] = obj
