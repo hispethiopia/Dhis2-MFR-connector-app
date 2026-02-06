@@ -55,6 +55,7 @@ const mfrMapping = {
     managingOrganization: "resource_managingOrganization_reference",
     isPHCU: "resource_extension_FacilityInformation_isPrimaryHealthCareUnit",
     isParentPHCU: "isParentPHCU",
+    isAmhara:"isAmhara",
     reportingHierarchyName: "resource_extension_reportingHierarchy"
 }
 

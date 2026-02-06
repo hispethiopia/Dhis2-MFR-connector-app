@@ -59,6 +59,7 @@ export interface MFRMapped {
     parentDHISId: string | null,
     changeType: string,
     isPHCU: boolean,
+    isAmhara:boolean,
     isParentPHCU: boolean,
     error: boolean,
     errorMessage: string,

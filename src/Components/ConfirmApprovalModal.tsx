@@ -9,7 +9,7 @@ import { Button, ButtonStrip, DataTable, DataTableCell, DataTableColumnHeader, D
 import { FullScreenLoader } from './FullScreenLoader';
 import { generateId, generatePassword } from '../functions/helpers';
 import { UserConfig } from '../model/Configuration.model';
-import { CHANGE_TYPE_CREATE, MFR_FACILITY_TYPE_ATTRIBUTE_UID, MFR_IS_PHCU_ATTRIBUTE_UID, MFR_LAST_UPDATED_ATTRIBUTE_UID, MFR_LOCATION_ATTRIBUTE_UID, MFR_OPERATIONAL_STATUS_ATTRIBUTE_UID, MFR_OWNERSHIP_ATTRIBUTE_UID, MFR_PASSWORD_RECEIVERS_USER_GROUP_UID, MFR_SETTLEMENT_ATTRIBUTE_UID, MFRMapping } from '../functions/constants';
+import { CHANGE_TYPE_CREATE, isAmhara_ATTRIBUTE_UID, MFR_FACILITY_TYPE_ATTRIBUTE_UID, MFR_IS_PHCU_ATTRIBUTE_UID, MFR_LAST_UPDATED_ATTRIBUTE_UID, MFR_LOCATION_ATTRIBUTE_UID, MFR_OPERATIONAL_STATUS_ATTRIBUTE_UID, MFR_OWNERSHIP_ATTRIBUTE_UID, MFR_PASSWORD_RECEIVERS_USER_GROUP_UID, MFR_SETTLEMENT_ATTRIBUTE_UID , MFRMapping } from '../functions/constants';
 
 
 interface ModalProps {
@@ -124,22 +124,51 @@ interface MetadataAssignmentProps {
     metadatasFetched: any[];
 }
 
+// const maintainAssignment = (props: MetadataAssignmentProps) => {
+//     let tempArray = new Set(props.metadataIds)
+//     let payload: any[] = []
+//     tempArray.forEach(metadata => {
+//         let metadataObject = props.metadatasFetched?.[metadata]
+//         //first remove if it exists. Do this for assign as well so that duplicate assignments won't exist.
+//         metadataObject.organisationUnits = metadataObject.organisationUnits.filter(ou => {
+//             return ou.id !== props.orgUnitId
+//         })
+
+//         if (props.assignmentType === "assign") {
+//             metadataObject.organisationUnits.push({ "id": props.orgUnitId })
+//         }
+//         payload.push(metadataObject)
+//     })
+//     return payload;
+// }
 const maintainAssignment = (props: MetadataAssignmentProps) => {
     let tempArray = new Set(props.metadataIds)
     let payload: any[] = []
-    tempArray.forEach(metadata => {
-        let metadataObject = props.metadatasFetched[metadata]
-        //first remove if it exists. Do this for assign as well so that duplicate assignments won't exist.
-        metadataObject.organisationUnits = metadataObject.organisationUnits.filter(ou => {
-            return ou.id !== props.orgUnitId
-        })
+
+    tempArray.forEach(metadataId => {
+        const metadataObject = props.metadatasFetched?.[metadataId]
+
+        // ✅ Skip if not found
+        if (!metadataObject) {
+            console.warn("Missing metadata:", metadataId)
+            return
+        }
+
+        // Ensure organisationUnits exists
+        metadataObject.organisationUnits = metadataObject.organisationUnits || []
+
+        // remove existing
+        metadataObject.organisationUnits =
+            metadataObject.organisationUnits.filter(ou => ou.id !== props.orgUnitId)
 
         if (props.assignmentType === "assign") {
-            metadataObject.organisationUnits.push({ "id": props.orgUnitId })
+            metadataObject.organisationUnits.push({ id: props.orgUnitId })
         }
+
         payload.push(metadataObject)
     })
-    return payload;
+
+    return payload
 }
 
 const createUserPayload = (
@@ -211,6 +240,7 @@ const generateOrgUnitObject = (orgUnitId: string, pendingApproval: MFRMapped, ge
             { "value": pendingApproval.settlement, attribute: { "id": MFR_SETTLEMENT_ATTRIBUTE_UID } },
             { "value": pendingApproval.lastUpdated, attribute: { "id": MFR_LAST_UPDATED_ATTRIBUTE_UID } },
             { "value": pendingApproval.isPHCU, attribute: { "id": MFR_IS_PHCU_ATTRIBUTE_UID } },
+            {"value": pendingApproval.isAmhara, attribute: { "id": isAmhara_ATTRIBUTE_UID } },
             { "value": pendingApproval.FT, attribute: { "id": MFR_FACILITY_TYPE_ATTRIBUTE_UID } }
         ]
     }
@@ -656,7 +686,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Data sets to assign: {
                                             allChanges?.newAssignments.dataSetsToAssign
-                                                .map(ds => fetchedObjects.dataSets[ds].displayName)
+                                                .map(ds => fetchedObjects.dataSets[ds]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -680,7 +710,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Data sets Unchanged: {
                                             allChanges?.unChangedAssignments.dataSets
-                                                .map(ds => fetchedObjects.dataSets[ds].displayName)
+                                                .map(ds => fetchedObjects.dataSets[ds]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -703,7 +733,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Data sets to unassign: {
                                             allChanges?.unassigns.dataSets
-                                                .map(ds => fetchedObjects.dataSets[ds].displayName)
+                                                .map(ds => fetchedObjects.dataSets[ds]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -726,7 +756,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Programs to assign: {
                                             allChanges?.newAssignments.programsToAssign
-                                                .map(pr => fetchedObjects.programs[pr].displayName)
+                                                .map(pr => fetchedObjects.programs[pr]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -750,7 +780,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Programs to unassign: {
                                             allChanges?.unassigns.programs
-                                                .map(pr => fetchedObjects.programs[pr].displayName)
+                                                .map(pr => fetchedObjects.programs[pr]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -773,7 +803,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Programs Unchanged: {
                                             allChanges?.unChangedAssignments.programs
-                                                .map(pr => fetchedObjects.programs[pr].displayName)
+                                                .map(pr => fetchedObjects.programs[pr]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -796,7 +826,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Category Options to assign: {
                                             allChanges?.newAssignments.cocToAssign
-                                                .map(co => fetchedObjects.categoryOptions[co].displayName)
+                                                .map(co => fetchedObjects.categoryOptions[co]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -820,7 +850,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Category options to unassign: {
                                             allChanges?.unassigns.coc
-                                                .map(co => fetchedObjects.categoryOptions[co].displayName)
+                                                .map(co => fetchedObjects.categoryOptions[co]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -843,7 +873,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Category options Unchanged: {
                                             allChanges?.unChangedAssignments.coc
-                                                .map(co => fetchedObjects.categoryOptions[co].displayName)
+                                                .map(co => fetchedObjects.categoryOptions[co]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -866,7 +896,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Organisation unit groups to assign: {
                                             allChanges?.newAssignments.ougToAssign
-                                                .map(co => fetchedObjects.organisationUnitGroups[co].displayName)
+                                                .map(co => fetchedObjects.organisationUnitGroups[co]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -890,7 +920,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Organisation unit groups to unassign: {
                                             allChanges?.unassigns.oug
-                                                .map(co => fetchedObjects.organisationUnitGroups[co].displayName)
+                                                .map(co => fetchedObjects.organisationUnitGroups[co]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>
@@ -913,7 +943,7 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                                     <div>
                                         Organisation unit groups Unchanged: {
                                             allChanges?.unChangedAssignments.oug
-                                                .map(oug => fetchedObjects.organisationUnitGroups[oug].displayName)
+                                                .map(oug => fetchedObjects.organisationUnitGroups[oug]?.displayName)
                                                 .map(name => <>{name}<br /></>)
                                         }
                                     </div>

@@ -5,7 +5,7 @@ export const MFR_SETTLEMENT_ATTRIBUTE_UID = "PPqNjqpFoRn"
 export const MFR_LAST_UPDATED_ATTRIBUTE_UID = "JhrOESQAVor"
 export const MFR_IS_PHCU_ATTRIBUTE_UID = "YLW32aoKTPy"
 export const MFR_FACILITY_TYPE_ATTRIBUTE_UID = "jfNsdZwddzD"
-
+export const isAmhara_ATTRIBUTE_UID = "iYSd2NcpIhm"
 export const MFR_PASSWORD_RECEIVERS_USER_GROUP_UID = "S2LrF6TpORx"
 
 export const MFR_OPTION_SETS_ATTRIBUTE_CODE = "MFR_OPTION_SETS"
@@ -78,5 +78,6 @@ export const MFRMapping = {
     latitude: "resource_position_latitude",
     altitude: "resource_position_altitude",
     managingOrganization: "resource_managingOrganization_reference",
-    isPHCU: ""
+    isPHCU: "",
+    isAmhara:""
 }

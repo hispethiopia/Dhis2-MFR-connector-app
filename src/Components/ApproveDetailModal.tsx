@@ -2,7 +2,7 @@ import { Button, ButtonStrip, DataTable, DataTableCell, DataTableColumnHeader, D
 import React, { useState, useContext, useEffect } from 'react'
 import { useDataMutation, useDataQuery } from '@dhis2/app-runtime';
 import { MFRMapped } from '../model/MFRMapped.model';
-import { CHANGE_TYPE_CREATE, CHANGE_TYPE_NEW_MAPPING, CHANGE_TYPE_UPDATE, MFR_FACILITY_TYPE_ATTRIBUTE_UID, MFR_IS_PHCU_ATTRIBUTE_UID, MFR_LAST_UPDATED_ATTRIBUTE_UID, MFR_LOCATION_ATTRIBUTE_UID, MFR_OPERATIONAL_STATUS_ATTRIBUTE_UID, MFR_OWNERSHIP_ATTRIBUTE_UID, MFR_SETTLEMENT_ATTRIBUTE_UID } from '../functions/constants';
+import { CHANGE_TYPE_CREATE, CHANGE_TYPE_NEW_MAPPING, CHANGE_TYPE_UPDATE, MFR_FACILITY_TYPE_ATTRIBUTE_UID, MFR_IS_PHCU_ATTRIBUTE_UID, MFR_LAST_UPDATED_ATTRIBUTE_UID, MFR_LOCATION_ATTRIBUTE_UID, MFR_OPERATIONAL_STATUS_ATTRIBUTE_UID, MFR_OWNERSHIP_ATTRIBUTE_UID, MFR_SETTLEMENT_ATTRIBUTE_UID ,isAmhara_ATTRIBUTE_UID} from '../functions/constants';
 import { FullScreenLoader } from './FullScreenLoader';
 import { MetadataContext } from '../App';
 import { useLoggingContext } from './Logging';
@@ -239,7 +239,7 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
             })
 
             let orgUnitWithDhisId = pendingApproval.isPHCU ? phcuItem : ouWithDhisId
-            console.log("Melaeke phcu item is ", phcuItem, orgUnitWithDhisId, ouWithDhisIdData)
+             console.log("Melaeke phcu item is ", phcuItem, orgUnitWithDhisId, ouWithDhisIdData)
 
 
             let orgUnitWithMFRCode = ouWithMFRCode.organisationUnits.organisationUnits[0]
@@ -471,6 +471,11 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                                 <DataTableCell style={getCellStyle(pendingApproval?.isPHCU.toString() !== orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID])}>Is PHCU</DataTableCell>
                                 <DataTableCell style={getCellStyle(pendingApproval?.isPHCU.toString() !== orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID])}>{orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID]}</DataTableCell>
                                 <DataTableCell style={getCellStyle(pendingApproval?.isPHCU.toString() !== orgUnit?.attributeValues[MFR_IS_PHCU_ATTRIBUTE_UID])}>{pendingApproval?.isPHCU.toString()}</DataTableCell>
+                            </DataTableRow>
+                            <DataTableRow>
+                                <DataTableCell style={getCellStyle(pendingApproval?.isAmhara.toString() !== orgUnit?.attributeValues[isAmhara_ATTRIBUTE_UID])}>Is Amhara</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.isAmhara.toString() !== orgUnit?.attributeValues[isAmhara_ATTRIBUTE_UID])}>{orgUnit?.attributeValues[isAmhara_ATTRIBUTE_UID]}</DataTableCell>
+                                <DataTableCell style={getCellStyle(pendingApproval?.isAmhara.toString() !== orgUnit?.attributeValues[isAmhara_ATTRIBUTE_UID])}>{pendingApproval?.isAmhara.toString()}</DataTableCell>
                             </DataTableRow>
                             <DataTableRow >
                                 <DataTableCell style={getCellStyle(newHierarchy !== oldHierarchy)}>Path</DataTableCell>
