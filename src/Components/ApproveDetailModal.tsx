@@ -262,7 +262,7 @@ export const ApproveDetailModal: React.FC<ModalProps> = ({
                 errors.push(`DHIS2 id from MFR is not pointing to an existing facility.
                     Dhis2 id from MFR is ${pendingApproval?.dhisId}`)
             }
-            if (orgUnitWithDhisId?.attributeValues[MFR_LOCATION_ATTRIBUTE_UID] !== "" &&
+            if (orgUnitWithDhisId && orgUnitWithDhisId?.attributeValues[MFR_LOCATION_ATTRIBUTE_UID] !== "" &&
                 orgUnitWithDhisId?.attributeValues[MFR_LOCATION_ATTRIBUTE_UID] !== pendingApproval.mfrId
             ) {
                 errors.push(`The MFR id pointed by the dhisObject is different from the pending approval. Please look at MFR id on the fields.`)
