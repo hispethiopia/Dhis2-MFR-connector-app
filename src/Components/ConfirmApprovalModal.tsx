@@ -188,8 +188,10 @@ const createUserPayload = (
 
     config.userGroups.forEach(newGroupId => {
         let targetGroup = updatedUserGroups.find(group => group.id === newGroupId);
+        console.log(targetGroup)
         if (!targetGroup) {
             targetGroup = { id: newGroupId, users: [] };
+            console.log(targetGroup)
             updatedUserGroups.push(targetGroup);
         }
         targetGroup.users.push({ id: userId });
@@ -461,10 +463,40 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
         let usersToCreate: any[] = [];
         let createdUsersPayload: any[] = []
 
+        // allChanges?.newAssignments.usersToCreate.forEach(uc => {
+        //     let newUserPayload = createUserPayload(uc, pendingApproval, orgUnitId, parentOrgUnitId,[],[])
+        //     createdUsersPayload.push(newUserPayload)
+        //     usersToCreate.push(...[newUserPayload])
+        // })
+        let userGroupsPayload: any[] = []
+
         allChanges?.newAssignments.usersToCreate.forEach(uc => {
-            let newUserPayload = createUserPayload(uc, pendingApproval, orgUnitId, parentOrgUnitId,[],[])
+
+            const newUserPayload = createUserPayload(
+                uc,
+                pendingApproval,
+                orgUnitId,
+                parentOrgUnitId,
+                [],
+                []
+            )
+
             createdUsersPayload.push(newUserPayload)
-            usersToCreate.push(...[newUserPayload])
+            usersToCreate.push(newUserPayload)
+
+            // 🔹 ADD USER TO GROUP OBJECTS
+            uc.userGroups.forEach(groupId => {
+                const group = fetchedObjects.userGroups[groupId]
+                if (!group) return
+
+                group.users = group.users || []
+
+                if (!group.users.find(u => u.id === newUserPayload.id)) {
+                    group.users.push({ id: newUserPayload.id })
+                }
+
+                userGroupsPayload.push(group)
+            })
         })
 
 
@@ -508,6 +540,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
 
             let metaObjects: any = {
                 users: usersPayload,
+                userGroups: userGroupsPayload,
                 dataSets: dataSetPayload,
                 programs: programPayload,
                 categoryOptions: categoryOptionsPayload,
