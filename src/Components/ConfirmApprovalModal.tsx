@@ -469,6 +469,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
         //     usersToCreate.push(...[newUserPayload])
         // })
         let userGroupsPayload: any[] = []
+        const userGroupMap: Record<string, any> = {}
 
         allChanges?.newAssignments.usersToCreate.forEach(uc => {
 
@@ -486,16 +487,21 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
 
             // 🔹 ADD USER TO GROUP OBJECTS
             uc.userGroups.forEach(groupId => {
-                const group = fetchedObjects.userGroups[groupId]
-                if (!group) return
 
-                group.users = group.users || []
-
-                if (!group.users.find(u => u.id === newUserPayload.id)) {
-                    group.users.push({ id: newUserPayload.id })
+                if (!userGroupMap[groupId]) {
+                    const baseGroup = fetchedObjects.userGroups[groupId]
+                    if (!baseGroup) return
+        
+                    userGroupMap[groupId] = {
+                        id: baseGroup.id,
+                        name: baseGroup.name,
+                        users: [...(baseGroup.users || [])]
+                    }
                 }
-
-                userGroupsPayload.push(group)
+        
+                if (!userGroupMap[groupId].users.find(u => u.id === newUserPayload.id)) {
+                    userGroupMap[groupId].users.push({ id: newUserPayload.id })
+                }
             })
         })
 
@@ -537,6 +543,7 @@ export const ConfirmApprovalModal: React.FC<ModalProps> = ({
                     existingDhisObject.geometry : { "type": "Point", "coordinates": [pendingApproval.longitude, pendingApproval.latitude] }
                 , parentOrgUnitId
             )
+            const userGroupsPayload = Object.values(userGroupMap)
 
             let metaObjects: any = {
                 users: usersPayload,
@@ -674,7 +681,21 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
             fetch();
         }
     }, [])
-
+    const hasChanges =
+    !!allChanges &&
+    (
+        allChanges.newAssignments.dataSetsToAssign.length > 0 ||
+        allChanges.newAssignments.programsToAssign.length > 0 ||
+        allChanges.newAssignments.cocToAssign.length > 0 ||
+        allChanges.newAssignments.ougToAssign.length > 0 ||
+        allChanges.newAssignments.usersToCreate.length > 0 ||
+        allChanges.unassigns.dataSets.length > 0 ||
+        allChanges.unassigns.programs.length > 0 ||
+        allChanges.unassigns.coc.length > 0 ||
+        allChanges.unassigns.oug.length > 0 ||
+        allChanges.unassigns.users.length > 0 ||
+        allChanges.changedUsers.length > 0
+    )
     return (
         <Modal large>
             {anyLoading && <FullScreenLoader />}
@@ -1078,8 +1099,11 @@ Users created: \n${createdUsersPayload.map(user => { return `username: "${user.u
                 }
                 {!finishedSaving && errorOccured === null && fetchedObjects &&
                     <ButtonStrip>
-                        <Button destructive onClick={() => handleApproval()}>
-                            Yes
+                        <Button
+                            destructive
+                            disabled={!hasChanges}
+                            onClick={() => handleApproval()}
+                        >   Yes
                         </Button>
                         <Button primary onClick={() => onClose()}>
                             No
